@@ -1,8 +1,54 @@
 # CHANGELOG
 
-## [Unreleased](https://github.com/gdsfactory/gplugins/compare/v0.11.0...main)
+## [Unreleased](https://github.com/gdsfactory/gplugins/compare/v1.0.1...main)
 
 <!-- towncrier release notes start -->
+
+## [1.0.2](https://github.com/gdsfactory/gplugins/releases/tag/v1.0.2) - 2024-06-21
+
+No significant changes.
+
+
+## [1.0.1](https://github.com/gdsfactory/gplugins/releases/tag/v1.0.1) - 2024-06-20
+
+- fix write_drc [#428](https://github.com/gdsfactory/gplugins/pull/428)
+
+## [1.0.0](https://github.com/gdsfactory/gplugins/releases/tag/v1.0.0) - 2024-06-20
+
+- Gdsfactory8 [#413](https://github.com/gdsfactory/gplugins/pull/413)
+- Color net labels differently in imported SPICE graph [#423](https://github.com/gdsfactory/gplugins/pull/423)
+- Strip brackets from model name in Calibre SPICE reader [#419](https://github.com/gdsfactory/gplugins/pull/419)
+- tidy3d fixes [#421](https://github.com/gdsfactory/gplugins/pull/421)
+
+## [0.14.0](https://github.com/gdsfactory/gplugins/releases/tag/v0.14.0) - 2024-06-02
+
+- fix notebooks [#411](https://github.com/gdsfactory/gplugins/pull/411)
+- fix tests [#409](https://github.com/gdsfactory/gplugins/pull/409)
+- Fix SPICE plotting example notebook [#398](https://github.com/gdsfactory/gplugins/pull/398)
+- Fix Elmer tests in CI, fixes towards Palace [#395](https://github.com/gdsfactory/gplugins/pull/395)
+- improve SDL interconnect docs [#401](https://github.com/gdsfactory/gplugins/pull/401)
+- Sdl [#393](https://github.com/gdsfactory/gplugins/pull/393)
+
+## [0.13.0](https://github.com/gdsfactory/gplugins/releases/tag/v0.13.0) - 2024-04-28
+
+- Add padding layer to gplugins [#387](https://github.com/gdsfactory/gplugins/pull/387)
+- allow mmi imbalance [#386](https://github.com/gdsfactory/gplugins/pull/386)
+- Support custom IO streams in `execute_and_stream_output` [#385](https://github.com/gdsfactory/gplugins/pull/385)
+- tcad scripts [#382](https://github.com/gdsfactory/gplugins/pull/382)
+- add gfviz [#363](https://github.com/gdsfactory/gplugins/pull/363)
+- small doc fixes [#380](https://github.com/gdsfactory/gplugins/pull/380)
+- improve femwell plugin [#377](https://github.com/gdsfactory/gplugins/pull/377)
+- retire devsim doc [#296](https://github.com/gdsfactory/gplugins/pull/296)
+- update tidy3d [#378](https://github.com/gdsfactory/gplugins/pull/378)
+
+## [0.12.0](https://github.com/gdsfactory/gplugins/releases/tag/v0.12.0) - 2024-04-09
+
+- Better error for wrong `top_cell` in netlist to networkx [#373](https://github.com/gdsfactory/gplugins/pull/373)
+- Improve KLayout-based SPICE handling to support Calibre LVS with generic devices [#371](https://github.com/gdsfactory/gplugins/pull/371)
+- fix autolabeler [#375](https://github.com/gdsfactory/gplugins/pull/375)
+- update jaxlib and flax [#376](https://github.com/gdsfactory/gplugins/pull/376)
+- fix tests [#372](https://github.com/gdsfactory/gplugins/pull/372)
+
 
 ## [0.11.0](https://github.com/gdsfactory/gplugins/releases/tag/v0.11.0) - 2024-03-24
 

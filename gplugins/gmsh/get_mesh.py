@@ -1,5 +1,6 @@
 from pathlib import Path
 
+import gdsfactory as gf
 import meshio
 from gdsfactory import Component
 from gdsfactory.typings import ComponentSpec, Layer, LayerStack
@@ -57,8 +58,10 @@ def get_mesh(
 
     # Add WAFER layer:
     padded_component = Component()
+    component = gf.get_component(component)
     _ = padded_component << component
-    (xmin, ymin), (xmax, ymax) = component.bbox
+    bbox = component.dbbox()
+    xmin, ymin, xmax, ymax = bbox.left, bbox.bottom, bbox.right, bbox.top
     points = [
         [xmin - wafer_padding, ymin - wafer_padding],
         [xmax + wafer_padding, ymin - wafer_padding],
@@ -66,7 +69,7 @@ def get_mesh(
         [xmin - wafer_padding, ymax + wafer_padding],
     ]
     padded_component.add_polygon(points, layer=wafer_layer)
-    padded_component.add_ports(component.get_ports_list())
+    padded_component.add_ports(component.ports)
 
     # Parse the resolutions dict to set default size_max
     if "resolutions" in kwargs:
@@ -83,9 +86,9 @@ def get_mesh(
 
     # Default layer labels
     if layer_physical_map is None:
-        layer_physical_map = {}
-        for layer_name in layer_stack.layers.keys():
-            layer_physical_map[layer_name] = layer_name
+        layer_physical_map = {
+            layer_name: layer_name for layer_name in layer_stack.layers.keys()
+        }
     else:
         for layer_name in layer_stack.layers.keys():
             if layer_name not in layer_physical_map.keys():
@@ -93,23 +96,17 @@ def get_mesh(
 
     # Default meshing flags (all True)
     if layer_meshbool_map is None:
-        layer_meshbool_map = {}
-        for layer_name in layer_stack.layers.keys():
-            layer_meshbool_map[layer_name] = True
+        layer_meshbool_map = {
+            layer_name: True for layer_name in layer_stack.layers.keys()
+        }
     else:
         for layer_name in layer_stack.layers.keys():
             if layer_name not in layer_physical_map.keys():
                 layer_meshbool_map[layer_name] = True
 
-    if type == "xy":
-        if z is None:
-            raise ValueError(
-                'For xy-meshing, a z-value must be provided via the float argument "z".'
-            )
-
-        return xy_xsection_mesh(
+    if type == "3D":
+        return xyz_mesh(
             component=padded_component,
-            z=z,
             layer_stack=layer_stack,
             default_characteristic_length=default_characteristic_length,
             resolutions=new_resolutions,
@@ -136,9 +133,15 @@ def get_mesh(
             background_remeshing_file=background_remeshing_file,
             **kwargs,
         )
-    elif type == "3D":
-        return xyz_mesh(
+    elif type == "xy":
+        if z is None:
+            raise ValueError(
+                'For xy-meshing, a z-value must be provided via the float argument "z".'
+            )
+
+        return xy_xsection_mesh(
             component=padded_component,
+            z=z,
             layer_stack=layer_stack,
             default_characteristic_length=default_characteristic_length,
             resolutions=new_resolutions,
