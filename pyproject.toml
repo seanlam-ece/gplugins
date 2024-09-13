@@ -19,11 +19,13 @@ authors = [
 classifiers = [
   "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
   "Operating System :: OS Independent"
 ]
 dependencies = [
-  "gdsfactory>=7.10.1",
+  "gdsfactory>=8.5.3",
   "pint",
+  "gdstk",
   "tqdm"
 ]
 description = "gdsfactory plugins"
@@ -32,7 +34,7 @@ license = {file = "LICENSE"}
 name = "gplugins"
 readme = "README.md"
 requires-python = ">=3.10"
-version = "0.11.0"
+version = "1.1.2"
 
 [project.optional-dependencies]
 dagster = ["dagster", "dagit"]
@@ -52,59 +54,68 @@ dev = [
 ]
 devsim = [
   "devsim",
-  "pyvista<=0.40",
-  "tidy3d==2.5.2"
+  "pyvista<=0.43.8",
+  "tidy3d>=2.5.2,<2.8"
 ]
 docs = [
   "jupytext",
   "matplotlib",
-  "jupyter-book==1.0.0",
-  "pyvista[jupyter]<=0.40"
+  "jupyter-book~=1.0",
+  "pyvista[all,trame]<=0.43.8"
 ]
 femwell = [
-  "femwell>=0.1.6,<0.2",
-  "meshwell>=1.0.7,<=1.1"
+  "femwell~=0.1.11",
+  "meshwell~=1.0.7"
+]
+gfviz = [
+  "jinja2",
+  "fastapi",
+  "shapely",
+  "natsort"
 ]
 gmsh = [
-  "gmsh==4.12.2",
+  "gmsh==4.13.0",
   "h5py",
   "mapbox_earcut",
   "meshio",
   "pygmsh",
-  "pyvista<=0.40",
+  "pyvista<=0.43.8",
   "trimesh",
   "shapely",
-  "meshwell>=1.0.7,<=1.1"
+  "meshwell~=1.0.7"
 ]
 klayout = [
   "klayout",
   "pyvis<=0.3.1"
 ]
 meow = [
-  "jax==0.4.23",
-  "jaxlib==0.4.23",
-  "meow-sim>=0.9.0,<0.11.0",
-  "tidy3d==2.5.2"
+  "jax>=0.4.26",
+  "jaxlib>=0.4.26",
+  "flax>=0.8.2",
+  "meow-sim~=0.11.0",
+  "tidy3d>=2.5.2,<2.8"
 ]
 sax = [
-  "jax<=0.4.23",
-  "jaxlib<=0.4.23",
-  "sax>=0.12.1,<0.13.0",
+  "jax>=0.4.26",
+  "jaxlib>=0.4.26",
+  "flax>=0.8.2",
+  "sax~=0.13.1",
   "scikit-learn",
   "pyvis<=0.3.1"
 ]
 schematic = [
   "bokeh",
+  "ipywidgets",
   "natsort"
 ]
 tidy3d = [
-  "tidy3d==2.5.2",
+  "tidy3d>=2.5.2,<2.8",
   "meshio",
-  "meshwell>=1.0.7,<=1.1"
+  "meshwell~=1.0.7"
 ]
 vlsir = [
-  "vlsir>=4.0.0,<6.0.0",
-  "vlsirtools>=4.0.0,<6.0.0"
+  "vlsir~=6.0",
+  "vlsirtools~=6.0"
 ]
 
 [tool.codespell]
@@ -133,7 +144,11 @@ norecursedirs = [
   'gplugins/sax/integrations',
   'gplugins/tidy3d/tests/tests_sparameters',
   'gplugins/fdtdz',
-  'gplugins/elmer'
+  'gplugins/elmer',
+  'gplugins/sentaurus',
+  'gplugins/gfviz',
+  'gplugins/gmeep',
+  'gplugins/modes'
 ]
 python_files = ["gplugins/*.py", "notebooks/*.ipynb", "tests/*.py"]
 testpaths = ["gplugins/", "tests"]
@@ -148,7 +163,8 @@ lint.ignore = [
   "C408",  # C408 Unnecessary `dict` call (rewrite as a literal)
   "E402",  # module level import not at top of file
   "B018",  # found useless expression
-  "B028"  # no explicit stacklevel
+  "B028",  # no explicit stacklevel
+  "D301"  # allow escape sequences in docstrings
 ]
 lint.select = [
   "E",  # pycodestyle errors
@@ -195,7 +211,7 @@ message_template = "Bump to {new_version}"
 tag_template = "v{new_version}"
 
 [tool.tbump.version]
-current = "0.11.0"
+current = "1.1.2"
 regex = '''
   (?P<major>\d+)
   \.

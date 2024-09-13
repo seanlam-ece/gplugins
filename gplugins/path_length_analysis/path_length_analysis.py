@@ -24,10 +24,11 @@ from bokeh.models import (
 from bokeh.palettes import Category10, Spectral4
 from bokeh.plotting import figure, from_networkx
 from gdsfactory.component import Component, ComponentReference
+from gdsfactory.get_netlist import get_netlist, get_netlist_recursive
 
 DEFAULT_CS_COLORS = {
-    "xs_rc": "red",
-    "xs_sc": "blue",
+    "rib": "red",
+    "strip": "blue",
     "r2s": "purple",
     "xs_m1": "#00FF92",
     "xs_m2": "gold",
@@ -48,7 +49,7 @@ def get_internal_netlist_attributes(
 
 
 def _get_link_name(component: Component) -> str:
-    ports = sorted(component.ports.keys())
+    ports = component.ports
     if len(ports) != 2:
         raise ValueError("routing components must have two ports")
     return ":".join(ports)
@@ -95,6 +96,7 @@ def report_pathlengths(
     result_dir: str | Path,
     visualize: bool = False,
     component_connectivity=None,
+    netlist=None,
 ) -> None:
     """Reports pathlengths for a given PIC.
 
@@ -103,11 +105,15 @@ def report_pathlengths(
         result_dir: the directory to write the pathlength table to.
         visualize: whether to visualize the pathlength graph.
         component_connectivity: a dictionary of component connectivity information.
+        netlist: a netlist dictionary. If None, will be generated from the pic.
     """
 
     print(f"Reporting pathlengths for {pic.name}...")
     pathlength_graph = get_edge_based_route_attr_graph(
-        pic, recursive=True, component_connectivity=component_connectivity
+        pic,
+        recursive=True,
+        component_connectivity=component_connectivity,
+        netlist=netlist,
     )
     route_records = get_paths(pathlength_graph)
 
@@ -212,14 +218,14 @@ def idealized_mxn_connectivity(
     Returns:
         None (graph is modified in-place)
     """
-    warnings.warn(f"using idealized links for {inst_name} ({ref.parent.name})")
+    warnings.warn(f"using idealized links for {inst_name} ({ref.cell.name})")
     in_ports = [p for p in ref.ports if p.startswith("in")]
     out_ports = [p for p in ref.ports if p.startswith("out")]
     for in_port in in_ports:
         for out_port in out_ports:
             inst_in = f"{inst_name},{in_port}"
             inst_out = f"{inst_name},{out_port}"
-            g.add_edge(inst_in, inst_out, weight=0.0001, component=ref.parent.name)
+            g.add_edge(inst_in, inst_out, weight=0.0001, component=ref.parent_cell.name)
 
 
 def _get_edge_based_route_attr_graph(
@@ -229,7 +235,17 @@ def _get_edge_based_route_attr_graph(
     netlist=None,
     netlists=None,
 ) -> nx.Graph:
-    connections = netlist["connections"]
+    """ Gets a connectivity graph for the circuit, with all path attributes on edges and ports as nodes.
+
+    Args:
+        component: the component to generate a graph from.
+        recursive: True to expand all hierarchy. False to only report top-level connectivity.
+        component_connectivity: a function to report connectivity for base components.\
+                None to treat as black boxes with no internal connectivity.
+        netlist: a netlist dictionary. If None, will be generated from the component.
+        netlists: a dictionary of netlists for each subcomponent.
+    """
+    connections = netlist["nets"]
     top_level_ports = netlist["ports"]
     g = nx.Graph()
     inst_route_attrs = {}
@@ -239,15 +255,16 @@ def _get_edge_based_route_attr_graph(
     inst_refs = {}
 
     for inst_name in netlist["instances"]:
-        ref = component.named_references[inst_name]
+        ref = component.insts[inst_name]
         inst_refs[inst_name] = ref
-        info = ref.parent.info.model_dump()
+        info = ref.cell.info.model_dump()
         if "route_info_length" in info:
-            inst_route_attrs[inst_name] = dict()
+            inst_route_attrs[inst_name] = {}
             for key, value in info.items():
                 if key.startswith("route_info"):
                     inst_route_attrs[inst_name].update({key: value})
-        for port_name, port in ref.ports.items():
+        for port in ref.ports:
+            port_name = port.name
             ploc = port.center
             pname = f"{inst_name},{port_name}"
             n_attrs = {
@@ -257,13 +274,13 @@ def _get_edge_based_route_attr_graph(
             node_attrs[pname] = n_attrs
             g.add_node(pname, **n_attrs)
     # nx.set_node_attributes(g, node_attrs)
-    g.add_edges_from(connections.items(), weight=0.0001)
+    g.add_edges_from(connections, weight=0.0001)
 
     # connect all internal ports for devices with connectivity defined
     # currently we only do this for routing components, but could do it more generally in the future
     for inst_name, inst_dict in netlist["instances"].items():
         route_info = inst_route_attrs.get(inst_name)
-        inst_component = component.named_references[inst_name]
+        inst_component = component.insts[inst_name]
         route_attrs = get_internal_netlist_attributes(
             inst_dict, route_info, inst_component
         )
@@ -275,10 +292,10 @@ def _get_edge_based_route_attr_graph(
                 g.add_edge(inst_in, inst_out, **attrs)
         elif recursive:
             sub_inst = inst_refs[inst_name]
-            if sub_inst.parent.name in netlists:
-                sub_netlist = netlists[sub_inst.parent.name]
+            if sub_inst.parent_cell.name in netlists:
+                sub_netlist = netlists[sub_inst.parent_cell.name]
                 sub_graph = _get_edge_based_route_attr_graph(
-                    sub_inst.parent,
+                    sub_inst.parent_cell,
                     recursive=True,
                     component_connectivity=component_connectivity,
                     netlist=sub_netlist,
@@ -315,13 +332,14 @@ def _get_edge_based_route_attr_graph(
                 component_connectivity(inst_name, sub_inst, g)
             else:
                 warnings.warn(
-                    f"ignoring any links in {inst_name} ({sub_inst.parent.name})"
+                    f"ignoring any links in {inst_name} ({sub_inst.parent_cell.name})"
                 )
 
     # connect all top level ports
     if top_level_ports:
         edges = []
-        for port, sub_port in top_level_ports.items():
+        for sub_port in top_level_ports:
+            port = sub_port.name
             p_attrs = dict(node_attrs[sub_port])
             e_attrs = {"weight": 0.0001}
             edge = [port, sub_port, e_attrs]
@@ -332,7 +350,10 @@ def _get_edge_based_route_attr_graph(
 
 
 def get_edge_based_route_attr_graph(
-    pic: Component, recursive=False, component_connectivity=None
+    pic: Component,
+    recursive=False,
+    component_connectivity=None,
+    netlist: dict[str, Any] | None = None,
 ) -> nx.Graph:
     """
     Gets a connectivity graph for the circuit, with all path attributes on edges and ports as nodes.
@@ -342,17 +363,19 @@ def get_edge_based_route_attr_graph(
         recursive: True to expand all hierarchy. False to only report top-level connectivity.
         component_connectivity: a function to report connectivity for base components.\
                 None to treat as black boxes with no internal connectivity.
+        netlist: a netlist dictionary. If None, will be generated from the pic.
 
     Returns:
         A NetworkX Graph
     """
-    from gdsfactory.get_netlist import get_netlist, get_netlist_recursive
-
-    if recursive:
-        netlists = get_netlist_recursive(pic, component_suffix="")
-        netlist = netlists[pic.name]
+    if netlist is None:
+        if recursive:
+            netlists = get_netlist_recursive(pic, component_suffix="")
+            netlist = netlists[pic.name]
+        else:
+            netlist = get_netlist(pic)
+            netlists = None
     else:
-        netlist = get_netlist(pic)
         netlists = None
 
     return _get_edge_based_route_attr_graph(
@@ -390,13 +413,14 @@ def get_pathlength_widgets(
         cs_colors = DEFAULT_CS_COLORS
     for node, data in G.nodes(data=True):
         node_positions[node] = (data["x"], data["y"])
-    instances = pic.named_references
-    for inst_name, ref in instances.items():
-        ref: ComponentReference
+    instances = pic.insts.get_inst_names()
+    for inst_name in instances:
+        ref = pic.insts[inst_name]
         inst_info = {"bbox": ref.bbox}
         inst_infos[inst_name] = inst_info
     pic_bbox = pic.bbox
-    for port_name, port in pic.ports.items():
+    for port in pic.ports:
+        port_name = port.name
         p = port.center
         node_positions[port_name] = (p[0], p[1])
 
@@ -423,8 +447,8 @@ def get_pathlength_widgets(
         k: node_positions[d["name"]] for k, d in graph_to_viz.nodes(data=True)
     }
     graph_renderer = from_networkx(graph_to_viz, node_positions_by_int_label)
-    graph_renderer.node_renderer.glyph = Circle(size=5, fill_color=Spectral4[0])
-    graph_renderer.node_renderer.hover_glyph = Circle(size=15, fill_color=Spectral4[1])
+    graph_renderer.node_renderer.glyph = Circle(fill_color=Spectral4[0])
+    graph_renderer.node_renderer.hover_glyph = Circle(fill_color=Spectral4[1])
 
     graph_renderer.edge_renderer.glyph = MultiLine(
         line_color="edge_color", line_alpha=0.8, line_width=5
@@ -440,9 +464,9 @@ def get_pathlength_widgets(
         "dst_port": [],
         "xs": [],
         "ys": [],
-        "route_info_xs_rc_length": [],
+        "route_info_rib_length": [],
         "route_info_length": [],
-        "route_info_xs_sc_length": [],
+        "route_info_strip_length": [],
         "route_info_r2s_length": [],
         "route_info_m2_length": [],
         "color": [],
@@ -560,5 +584,45 @@ def visualize_graph(
     layout = row(plot, table, sizing_mode="stretch_both")
     curdoc().add_root(layout)
     result_dir = Path(result_dir)
+    result_dir.mkdir(exist_ok=True, parents=True)
     output_file(result_dir / f"{pic.name}.html")
     show(layout)
+
+
+if __name__ == "__main__":
+    import gdsfactory as gf
+
+    xs_top = [0, 10, 20, 40, 50, 80]
+    pitch = 127.0
+    N = len(xs_top)
+    xs_bottom = [(i - N / 2) * pitch for i in range(N)]
+    layer = (1, 0)
+
+    top_ports = [
+        gf.Port(
+            f"top_{i}", center=(xs_top[i], 0), width=0.5, orientation=270, layer=layer
+        )
+        for i in range(N)
+    ]
+
+    bot_ports = [
+        gf.Port(
+            f"bot_{i}",
+            center=(xs_bottom[i], -300),
+            width=0.5,
+            orientation=90,
+            layer=layer,
+        )
+        for i in range(N)
+    ]
+
+    c = gf.Component()
+    routes = gf.routing.route_bundle(
+        c, top_ports, bot_ports, separation=5.0, end_straight_length=100
+    )
+
+    report_pathlengths(
+        pic=c,
+        result_dir=Path("rib_strip_pathlengths"),
+        visualize=True,
+    )
