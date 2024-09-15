@@ -19,7 +19,9 @@ from gdsfactory.generic_tech.layer_map import LAYER
 from gplugins.lumerical.recipes.microring_modulator_recipe import (
     PNJunctionDesignIntent,
     PNMicroringModulatorRecipe,
+    PNJunctionRecipe,
 )
+from gplugins.lumerical.recipes.fdtd_recipe import FdtdRecipe
 from gplugins.lumerical.simulation_settings import (
     SimulationSettingsLumericalCharge,
     SimulationSettingsLumericalMode,
@@ -238,7 +240,7 @@ pn_junction_component = c.named_references["rotate_1"].parent
 c.show()
 
 ### 2. DEFINE LAYER STACK
-core_thickness = 0.15  # um
+core_thickness = 0.155  # um
 slab_thickness = 0.05  # um
 
 # Dopant concentrations
@@ -267,7 +269,7 @@ dopant_concentration_sets = {
     "carrier_fine_tune4": [1.6e18, 1e19, 1e20, 1.6e18, 1e19, 1e20],
     "carrier_fine_tune5": [1.2e18, 1e19, 1e20, 2e18, 1e19, 1e20],
 }
-set = "carrier_fine_tune5"
+set = "carrier_fine_tune2"
 
 n = dopant_concentration_sets[set][0]
 
@@ -398,6 +400,51 @@ layerstack_lumerical = LayerStack(
     }
 )
 
+
+layerstack_no_doping = LayerStack(
+    layers={
+        "clad": LayerLevel(
+            layer=(99999, 0),
+            thickness=3.0,
+            zmin=0.0,
+            material="sio2",
+            sidewall_angle=0.0,
+            mesh_order=9,
+            layer_type="background",
+        ),
+        "box": LayerLevel(
+            layer=(99999, 0),
+            thickness=3.0,
+            zmin=-3.0,
+            material="sio2",
+            sidewall_angle=0.0,
+            mesh_order=9,
+            layer_type="background",
+        ),
+        "core": LayerLevel(
+            layer=(1, 0),
+            thickness=core_thickness,
+            zmin=0.0,
+            material="si",
+            sidewall_angle=2.0,
+            width_to_z=0.5,
+            mesh_order=2,
+            layer_type="grow",
+            info={"active": True},
+        ),
+        "slab90": LayerLevel(
+            layer=(3, 0),
+            thickness=slab_thickness,
+            zmin=0.0,
+            material="si",
+            sidewall_angle=2.0,
+            width_to_z=0.5,
+            mesh_order=2,
+            layer_type="grow",
+            info={"active": True},
+        )}
+)
+
 # 3. DEFINE SIMULATION AND CONVERGENCE SETTINGS
 charge_settings = SimulationSettingsLumericalCharge(x=pn_junction_component.x,
                                                     y=pn_junction_component.y,
@@ -430,7 +477,20 @@ mrm_recipe = PNMicroringModulatorRecipe(component=c,
                                         fdtd_convergence_setup=LUMERICAL_FDTD_CONVERGENCE_SETTINGS,
                                         interconnect_simulation_setup=LUMERICAL_INTERCONNECT_SIMULATION_SETTINGS,
                                         dirpath=dirpath,
-                                        )
+                                        dependencies=[PNJunctionRecipe(component=c.named_references["rotate_1"].parent,
+                                                             layer_stack=layerstack_lumerical,
+                                                             design_intent=design_intent,
+                                                             mode_simulation_setup=mode_settings,
+                                                             mode_convergence_setup=mode_convergence_settings,
+                                                             charge_simulation_setup=charge_settings,
+                                                             charge_convergence_setup=charge_convergence_settings,
+                                                             dirpath=dirpath),
+                                        FdtdRecipe(component=c.named_references["coupler_ring_1"].parent,
+                                                   layer_stack=layerstack_no_doping,
+                                                   simulation_setup=SIMULATION_SETTINGS_LUMERICAL_FDTD,
+                                                   convergence_setup=LUMERICAL_FDTD_CONVERGENCE_SETTINGS,
+                                                   dirpath=dirpath)]
+                                            )
 mrm_recipe.override_recipe = False
 mrm_recipe.eval()
 

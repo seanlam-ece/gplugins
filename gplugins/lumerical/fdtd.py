@@ -562,8 +562,8 @@ class LumericalFdtdSimulation(Simulation):
         s.runsweep()
         s.loadsweep()
         sp = s.getsweepresult("s-parameter sweep", "S parameters")
-        s.exportsweep("s-parameter sweep", str(filepath.absolute()))
-        logger.info(f"Writing Sparameters to {str(filepath.absolute())!r}")
+        s.exportsweep("s-parameter sweep", str(filepath.resolve()))
+        logger.info(f"Writing Sparameters to {str(filepath.resolve())!r}")
 
         sp["wavelengths"] = sp.pop("lambda").flatten() / um
         np.savez_compressed(self.filepath_npz, **sp)

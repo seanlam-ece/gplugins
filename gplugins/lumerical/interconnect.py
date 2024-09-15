@@ -516,6 +516,123 @@ def get_resonances(wavelength: list,
                          "resonant_power": peak_powers,
                          })
 
+def get_fwhm(wavelength: list,
+                        power: list,
+                        peaks_flipped: bool = False,
+                        prominence: float = 0.5,
+                        width: float = 1e-3,
+                        ) -> pd.DataFrame:
+    """
+    Get resonance wavelengths vs. full width half max (FWHM)
+
+    Parameters:
+        wavelength: Wavelengths (um)
+        power: Optical power (dBm)
+        peaks_flipped: True if resonances are dips rather than peaks
+        prominence: Height or optical power in respect to surroundings of a peak
+            to be considered a resonance. (dBm)
+        width: Minimum width between resonances. (um)
+
+    Returns:
+         Dataframe with resonance wavelengths and FWHM
+         | resonant_wavelength | fwhm  |
+         | float               | float |
+         | um                  | um    |
+    """
+    # Convert to numpy format
+    power = np.array(power)
+    wavelength = np.array(wavelength)
+
+    # Sort wavelengths in ascending order
+    p = wavelength.argsort()
+    wavelength_sorted = wavelength[p]
+    power_sorted = power[p]
+    abs_power = 10 ** (power_sorted / 10)
+
+    # Get resonances
+    resonances = get_resonances(wavelength=list(wavelength_sorted),
+                                power=list(power_sorted),
+                                peaks_flipped=peaks_flipped,
+                                prominence=prominence,
+                                width=width)
+
+    # Get bandwidths
+    bandwidths = []
+    resonant_wavelengths = []
+    for i in range(0, len(resonances.loc[:, "resonant_wavelength"])):
+        resonant_wavl = resonances.loc[i, "resonant_wavelength"]
+        resonant_pow = resonances.loc[i, "resonant_power"]
+        fwhm_pow = 10 ** (resonant_pow / 10) / 2
+
+        ## Get wavelength range that surrounds resonance
+        # Case 0: First resonance may have truncation from wavelength range
+        if i == 0:
+            # Get wavelength range
+            indices = np.where((wavelength_sorted[0] < wavelength_sorted) & (
+                    wavelength_sorted <= resonances.loc[
+                i + 1, "resonant_wavelength"]))
+        # Case 1: Last resonance may have truncation from wavelength range
+        elif i == len(resonances.loc[:, "resonant_wavelength"]) - 1:
+            indices = np.where((resonances.loc[i - 1, "resonant_wavelength"] < wavelength_sorted) & (wavelength_sorted <= wavelength_sorted[-1]))
+        # Case 2: Resonances between other resonances
+        else:
+            indices = np.where((resonances.loc[i - 1, "resonant_wavelength"] < wavelength_sorted) & (wavelength_sorted <= resonances.loc[i + 1, "resonant_wavelength"]))
+
+        wavl_range = wavelength_sorted[indices]
+        pow_range = abs_power[indices]
+
+        cross_indices = np.where(np.diff(np.sign(pow_range - fwhm_pow)))
+        cross_wavl = wavl_range[cross_indices]
+
+        # If resonance does not cross FWHM, skip
+        ind = np.argmax(cross_wavl > resonant_wavl)
+        if ind - 1 < 0:
+            continue
+        else:
+            bandwidths.append(cross_wavl[ind] - cross_wavl[ind - 1])
+            resonant_wavelengths.append(resonant_wavl)
+
+    return pd.DataFrame({"resonant_wavelength": resonant_wavelengths,
+                         "fwhm": bandwidths,
+                         })
+
+def get_q(wavelength: list,
+                        power: list,
+                        peaks_flipped: bool = False,
+                        prominence: float = 0.5,
+                        width: float = 1e-3,
+                        ) -> pd.DataFrame:
+    """
+    Get resonance wavelengths vs. quality factor (Q)
+
+    Q factor is defined as:
+    Q = resonant_wavelength / FWHM
+
+    Parameters:
+        wavelength: Wavelengths (um)
+        power: Optical power (dBm)
+        peaks_flipped: True if resonances are dips rather than peaks
+        prominence: Height or optical power in respect to surroundings of a peak
+            to be considered a resonance. (dBm)
+        width: Minimum width between resonances. (um)
+
+    Returns:
+         Dataframe with resonance wavelengths and FWHM
+         | resonant_wavelength | q     |
+         | float               | float |
+         | um                  |       |
+    """
+    fwhm = get_fwhm(wavelength=wavelength,
+                    power=power,
+                    peaks_flipped=peaks_flipped,
+                    prominence=prominence,
+                    width=width)
+
+    return pd.DataFrame({"resonant_wavelength": list(fwhm.loc[:, "resonant_wavelength"]),
+                         "q": list(fwhm.loc[:, "resonant_wavelength"] / fwhm.loc[:, "fwhm"]),
+                         })
+
+
 def get_free_spectral_range(wavelength: list,
                             power: list,
                             peaks_flipped: bool = False,
