@@ -1,8 +1,8 @@
 # Book settings
 # Learn more at https://jupyterbook.org/customize/config.html
 
-title: gplugins
-author: gdsfactory
+title: GDSFactory Plugins
+author: GDSFactory
 
 # Force re-execution of notebooks on each build.
 # See https://jupyterbook.org/content/execute.html
@@ -24,7 +24,9 @@ execute:
     - "*palace*"
     - "*fdtdz*"
     - "*elmer_01_electrostatic*"
-    # - "*sax_01_sax*"
+    - "*meep_01_sparameters*"
+    - "*meow_01*"
+    - "*femwell_01_modes*"
     # - "*20_schematic_driven_layout*"
     # - "*001_meep_sparameters*"
     # - "*00_tidy3d.ipynb"
@@ -41,6 +43,10 @@ html:
   use_repository_button: true
   use_issues_button: true
   baseurl: https://github.com/gdsfactory/gplugins
+  options:
+    logo:
+      light: "_static/logo_black.png"
+      dark: "_static/logo_white.png"
 
 # Information about where the book exists on the web
 repository:
@@ -74,3 +80,7 @@ sphinx:
     #     .py:
     #         - jupytext.reads
     #         - fmt: py
+    html_theme_options:
+      logo:
+        image_light: logo_white.png
+        image_dark: logo_black.png

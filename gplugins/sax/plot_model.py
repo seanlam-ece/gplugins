@@ -4,11 +4,11 @@ from __future__ import annotations
 
 import matplotlib.pyplot as plt
 import numpy as np
-from pydantic import validate_arguments
+from pydantic import validate_call
 from sax.saxtypes import Model
 
 
-@validate_arguments
+@validate_call
 def plot_model(
     model: Model,
     port1: str = "o1",
@@ -65,9 +65,9 @@ def plot_model(
                 y = np.abs(sdict[(port1, port2)])
                 y = 20 * np.log10(y) if logscale else y
                 ylabel = "|S (dB)|" if logscale else "|S|"
-            ax.plot(wavelengths * 1e9, y, label=port2)
+            ax.plot(wavelengths, y, label=port2)
     ax.set_title(port1)
-    ax.set_xlabel("wavelength (nm)")
+    ax.set_xlabel("wavelength (um)")
     ax.set_ylabel(ylabel)
     plt.legend()
     return ax

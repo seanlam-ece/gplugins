@@ -22,17 +22,15 @@ def component_test_density1(
     small_rect2_offset=(25, 25),
 ):
     c = gf.Component()
-    _large_rect = c << gf.components.rectangle(
-        size=large_rect_size, layer=(1, 0), centered=True
-    )
+    _ = c << gf.components.rectangle(size=large_rect_size, layer=(1, 0), centered=True)
     small_rect1 = c << gf.components.rectangle(
         size=small_rect1_size, layer=(2, 0), centered=True
     )
     small_rect2 = c << gf.components.rectangle(
         size=small_rect2_size, layer=(2, 0), centered=True
     )
-    small_rect1.move(small_rect1_offset)
-    small_rect2.move(small_rect2_offset)
+    small_rect1.dmove(small_rect1_offset)
+    small_rect2.dmove(small_rect2_offset)
     return c
 
 
@@ -87,7 +85,6 @@ def test_estimate_weighted_global_density(
     tile_size,
     expected_global_density,
 ):
-    # Create test gds
     gdspath = PATH.test_data / "test_gds_global_density.gds"
     test_component = component_test_density1(
         large_rect_size=large_rect_size,
@@ -108,5 +105,6 @@ def test_estimate_weighted_global_density(
     estimated_density = estimate_weighted_global_density(
         Xi=Xi, Yi=Yi, Zi=Zi, bbox=get_gds_bbox(gdspath)
     )
-
-    assert np.isclose(estimated_density, expected_global_density)
+    assert np.isclose(
+        estimated_density, expected_global_density
+    ), f"{estimated_density=}, {expected_global_density=}"

@@ -1,3 +1,4 @@
+# type: ignore
 from __future__ import annotations
 
 from collections.abc import Sequence
@@ -26,12 +27,14 @@ from gplugins.gmsh.parse_gds import cleanup_component, to_polygons
 def get_u_bounds_polygons(
     polygons: MultiPolygon | list[Polygon],
     xsection_bounds: tuple[tuple[float, float], tuple[float, float]],
+    u_offset: float = 0.0,
 ):
     """Performs the bound extraction given a (Multi)Polygon or [Polygon] and cross-sectional line coordinates.
 
     Args:
         layer_polygons_dict: dict containing layernames: shapely polygons pairs
         xsection_bounds: ( (x1,y1), (x2,y2) ), with x1,y1 beginning point of cross-sectional line and x2,y2 the end.
+        u_offset: amount to offset the returned polygons in the lateral dimension
 
     Returns: list of bounding box coordinates (u1,u2)) in xsection line coordinates (distance from xsection_bounds[0]).
     """
@@ -51,7 +54,12 @@ def get_u_bounds_polygons(
                 bounds = entry.bounds
                 p1 = Point([bounds[0], bounds[1]])
                 p2 = Point([bounds[2], bounds[3]])
-                return_list.append([linestart.distance(p1), linestart.distance(p2)])
+                return_list.append(
+                    [
+                        linestart.distance(p1) + u_offset,
+                        linestart.distance(p2) + u_offset,
+                    ]
+                )
     return return_list
 
 
@@ -254,11 +262,7 @@ def uz_xsection_mesh(
     )
 
     # simulation polygons to u-z coordinates along cross-sectional line
-    if "z_bounds" in kwargs:
-        z_bounds = kwargs["z_bounds"]
-    else:
-        z_bounds = None
-
+    z_bounds = kwargs.get("z_bounds", None)
     bounds_dict = get_uz_bounds_layers(
         buffered_layer_polygons_dict,
         xsection_bounds,
@@ -402,7 +406,7 @@ def uz_xsection_mesh(
 if __name__ == "__main__":
     from gdsfactory.pdk import get_layer_stack
 
-    c = gf.component.Component()
+    c = gf.Component()
 
     waveguide = c << gf.get_component(gf.components.straight_pin(length=10, taper=None))
     undercut = c << gf.get_component(
@@ -412,7 +416,7 @@ if __name__ == "__main__":
             centered=True,
         )
     )
-    undercut.move(destination=[4, 0])
+    undercut.dmove((4, 0))
     c.show()
 
     filtered_layer_stack = LayerStack(
@@ -449,6 +453,8 @@ if __name__ == "__main__":
         [(4, -15), (4, 15)],
         filtered_layer_stack,
         resolutions=resolutions,
+        layer_physical_map={},
+        layer_meshbool_map={},
         background_tag="Oxide",
         background_padding=(0, 0, 0, 0),
         filename="mesh.msh",
