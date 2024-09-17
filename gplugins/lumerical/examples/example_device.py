@@ -17,9 +17,11 @@ cross_section_pn = partial(
     width_metal=0.5,
 )
 
-doped_path = gf.Path()
-doped_path.append(gf.path.arc(radius=10.0, angle=361))
-c << doped_path.extrude(cross_section=cross_section_pn)
+# doped_path = gf.Path()
+# doped_path.append(gf.path.arc(radius=10.0, angle=361))
+p = gf.path.arc(radius=10, angle=135)
+c = p.extrude(cross_section_pn)
+# c << doped_path.extrude(cross_section=cross_section_pn)
 
 ### TODO: Update generic PDK with dopants in layer_stack
 from gdsfactory.generic_tech.layer_map import LAYER
@@ -27,11 +29,11 @@ from gdsfactory.pdk import get_layer_stack
 from gdsfactory.technology.layer_stack import LayerLevel
 
 layer_stack = get_layer_stack()
-layer_stack.layers["substrate"].layer_type = "background"
-layer_stack.layers["substrate"].background_doping_ion = None
-layer_stack.layers["substrate"].background_doping_concentration = None
-layer_stack.layers["box"].layer_type = "background"
-layer_stack.layers["clad"].layer_type = "background"
+layer_stack.layers["substrate"].info["layer_type"] = "background"
+layer_stack.layers["substrate"].info["background_doping_ion"] = None
+layer_stack.layers["substrate"].info["background_doping_concentration"] = None
+layer_stack.layers["box"].info["layer_type"] = "background"
+layer_stack.layers["clad"].info["layer_type"] = "background"
 layer_stack.layers["core"].sidewall_angle = 0
 layer_stack.layers["slab90"].sidewall_angle = 0
 layer_stack.layers["via_contact"].sidewall_angle = 0
@@ -44,7 +46,7 @@ layer_stack.layers["N"] = LayerLevel(
     background_doping_concentration=5e17,
     background_doping_ion="n",
     orientation="100",
-    layer_type="doping",
+    info={"layer_type": "doping"},
 )
 layer_stack.layers["P"] = LayerLevel(
     layer=LAYER.P,
@@ -55,7 +57,7 @@ layer_stack.layers["P"] = LayerLevel(
     background_doping_concentration=7e17,
     background_doping_ion="p",
     orientation="100",
-    layer_type="doping",
+    info={"layer_type": "doping"},
 )
 layer_stack.layers["NP"] = LayerLevel(
     layer=LAYER.NP,
@@ -66,7 +68,7 @@ layer_stack.layers["NP"] = LayerLevel(
     background_doping_concentration=3e18,
     background_doping_ion="n",
     orientation="100",
-    layer_type="doping",
+    info={"layer_type": "doping"},
 )
 layer_stack.layers["PP"] = LayerLevel(
     layer=LAYER.PP,
@@ -77,7 +79,7 @@ layer_stack.layers["PP"] = LayerLevel(
     background_doping_concentration=2e18,
     background_doping_ion="p",
     orientation="100",
-    layer_type="doping",
+    info={"layer_type": "doping"},
 )
 layer_stack.layers["NPP"] = LayerLevel(
     layer=LAYER.NPP,
@@ -88,7 +90,7 @@ layer_stack.layers["NPP"] = LayerLevel(
     background_doping_concentration=1e19,
     background_doping_ion="n",
     orientation="100",
-    layer_type="doping",
+    info={"layer_type": "doping"},
 )
 layer_stack.layers["PPP"] = LayerLevel(
     layer=LAYER.PPP,
@@ -99,10 +101,10 @@ layer_stack.layers["PPP"] = LayerLevel(
     background_doping_concentration=1e19,
     background_doping_ion="p",
     orientation="100",
-    layer_type="doping",
+    info={"layer_type": "doping"},
 )
 
-c.show()
+# c.show()
 
 # Set up simulation settings
 charge_settings = SimulationSettingsLumericalCharge(x=10, y=10)

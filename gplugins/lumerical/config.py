@@ -22,6 +22,7 @@ MATERIAL_COLORS = [
     np.array([1, 0, 1, OPACITY]),
 ] * 10
 
+dbu = 1e3
 um = 1e-6
 cm = 1e-2
 nm = 1e-9

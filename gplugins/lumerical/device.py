@@ -10,7 +10,7 @@ from gdsfactory import logger
 from gdsfactory.pdk import get_layer_stack
 from gdsfactory.technology import LayerStack
 
-from gplugins.lumerical.config import cm, um, OPACITY, MATERIAL_COLORS
+from gplugins.lumerical.config import cm, um, dbu, OPACITY, MATERIAL_COLORS
 from gplugins.lumerical.convergence_settings import (
     LUMERICAL_CHARGE_CONVERGENCE_SETTINGS,
     ConvergenceSettingsLumericalCharge,
@@ -318,11 +318,11 @@ class LumericalChargeSimulation(Simulation):
 
         # Get metal layer polygons. Each polygon is a metal boundary condition if it is inside the simulation region.
         layer_spec = (
-            self.layerstack.layers[ss.metal_layer].layer
+            (self.layerstack.layers[ss.metal_layer].layer.layer.layer, self.layerstack.layers[ss.metal_layer].layer.layer.datatype)
             if isinstance(ss.metal_layer, str)
             else ss.metal_layer
         )
-        polygons = c.get_polygons(by_spec=layer_spec)
+        polygons = c.get_polygons(by="tuple", layers=[layer_spec])
 
         # Get simulation region orientation and bounds
         # Get list of coords that cross the simulation plane
@@ -335,9 +335,10 @@ class LumericalChargeSimulation(Simulation):
             else zmin + thickness / 2
         )
         bound_coords = []
+        polygons = polygons[layer_spec]
         if ss.dimension == "2D X-Normal":
             for i in range(0, len(polygons)):
-                poly_coords = polygons[i]
+                poly_coords = np.array([[int(p.x / dbu), int(p.y / dbu)] for p in polygons[i].each_point_hull()])
                 coords = []
                 for j in range(0, len(poly_coords) - 1):
                     # If x coord crosses the simulation plane, continue to check whether the points are in the
@@ -368,7 +369,7 @@ class LumericalChargeSimulation(Simulation):
 
         elif ss.dimension == "2D Y-Normal":
             for i in range(0, len(polygons)):
-                poly_coords = polygons[i]
+                poly_coords = np.array([[p.x / dbu, p.y / dbu] for p in polygons[i].each_point_hull()])
                 coords = []
                 for j in range(0, len(poly_coords) - 1):
                     # If y coord crosses the simulation plane, continue to check whether the points are in the
@@ -411,7 +412,7 @@ class LumericalChargeSimulation(Simulation):
             s.addelectricalcontact()
             s.set("name", f"b{i}")
             s.set("surface type", "coordinates of domain")
-            s.eval(f'set("coordinates", {{{bound_coords[i]}}});')
+            s.eval(f'set("coordinates", {{{[float(coord) for coord in bound_coords[i]]}}});')
 
             # Add boundary condition settings
             self.boundary_condition_settings[f"b{i}"] = {}

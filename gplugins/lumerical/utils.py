@@ -12,6 +12,7 @@ from gdsfactory import logger
 from gdsfactory.pdk import get_layer_stack
 from gdsfactory.technology import LayerStack
 from gdsfactory.typings import PathType
+from gdsfactory import get_layer
 
 from gplugins.lumerical.config import ENABLE_DOPING, um
 
@@ -51,24 +52,31 @@ def layerstack_to_lbr(
     layers = SubElement(layer_builder, "layers")
     doping_layers = SubElement(layer_builder, "doping_layers")
     for layer_name, layer_info in layerstack.to_dict().items():
-        if layer_info["info"]["layer_type"] == "grow":
+        if layer_info["info"].get("layer_type", "") == "grow":
             process = "Grow"
-        elif layer_info["info"]["layer_type"] == "background":
+        elif layer_info["info"].get("layer_type", "")  == "background":
             process = "Background"
         elif (
-            layer_info["info"]["layer_type"] == "doping"
-            or layer_info["info"]["layer_type"] == "implant"
+            layer_info["info"].get("layer_type", "")  == "doping"
+            or layer_info["info"].get("layer_type", "")  == "implant"
         ):
             process = "Implant"
         else:
             logger.warning(
-                f'"{layer_info["info"]["layer_type"]}" layer type not supported for "{layer_name}" in Lumerical. Skipping in LBR process file generation.'
+                f'"{layer_info["info"].get("layer_type", "") }" layer type not supported for "{layer_name}" in Lumerical. Defaulting to "grow".'
             )
             process = "Grow"
 
         ### Set optical and metal layers
         if process == "Grow" or process == "Background":
             layer = SubElement(layers, "layer")
+
+            try:
+                gds_layer = f'{layer_info["layer"].layer[0]}:{layer_info["layer"].layer[1]}'
+            except ValueError:
+                gds_layer = f'{layer_info["layer"].layer.layer}:{layer_info["layer"].layer.datatype}'
+            except AttributeError:
+                gds_layer = f'{layerstack.layers[layer_name].derived_layer.layer.layer}:{layerstack.layers[layer_name].derived_layer.layer.datatype}'
 
             # Default params
             layer_params = {
@@ -79,7 +87,7 @@ def layerstack_to_lbr(
                 "pattern_material_index": "0",
                 "material_index": "0",
                 "name": layer_name,
-                "layer_name": f'{layer_info["layer"].layer[0]}:{layer_info["layer"].layer[1]}',
+                "layer_name": gds_layer,
                 "start_position": f'{layer_info["zmin"] * um}',
                 "thickness": f'{layer_info["thickness"] * um}',
                 "process": f"{process}",
@@ -118,9 +126,9 @@ def layerstack_to_lbr(
 
             # KNOWN ISSUE: Dopant must be either 'p' or 'n'. Anything else will cause CHARGE to crash upon importing process file.
             # FIX: Raise ValueErrorr when dopant is specified incorrectly
-            if layer_info.get(
+            if layer_info["info"].get(
                 "background_doping_concentration", False
-            ) and layer_info.get("background_doping_ion", False):
+            ) and layer_info["info"].get("background_doping_ion", False):
                 doping_layer = SubElement(doping_layers, "layer")
                 doping_params = {
                     "z_surface_positions": f'{layer_info["zmin"] * um}',
@@ -129,12 +137,12 @@ def layerstack_to_lbr(
                     "lateral_scatter": "2e-08",
                     "range": f"{layer_info['thickness'] / 2 * um}",
                     "theta": "0",
-                    "mask_layer_number": f'{layer_info["layer"][0]}:{layer_info["layer"][1]}',
+                    "mask_layer_number": f'{layer_info["layer"].layer[0]}:{layer_info["layer"].layer[1]}',
                     "kurtosis": "0",
                     "process": f"{process}",
                     "skewness": "0",
                     "straggle": f"{layer_info['thickness'] * um}",
-                    "concentration": f"{layer_info['background_doping_concentration']}",
+                    "concentration": f"{layer_info['info']['background_doping_concentration']}",
                     "enabled": "1",
                     "name": f"{layer_name}_doping",
                 }
@@ -142,13 +150,13 @@ def layerstack_to_lbr(
                     doping_layer.set(param, val)
 
                 if (
-                    layer_info["background_doping_ion"] == "n"
-                    or layer_info["background_doping_ion"] == "p"
+                    layer_info["info"]["background_doping_ion"] == "n"
+                    or layer_info["info"]["background_doping_ion"] == "p"
                 ):
-                    doping_layer.set("dopant", layer_info["background_doping_ion"])
+                    doping_layer.set("dopant", layer_info["info"]["background_doping_ion"])
                 else:
                     raise ValueError(
-                        f'Dopant must be "p" or "n". Got {layer_info["background_doping_ion"]}.'
+                        f'Dopant must be "p" or "n". Got {layer_info["info"]["background_doping_ion"]}.'
                     )
 
     # If no doping layers exist, delete element
@@ -331,7 +339,20 @@ class Simulation:
         """
         h = hashlib.sha1()
         if self.component is not None:
-            h.update(self.component.hash())
+            try:
+                h.update(self.component.hash())
+            except:
+                # Return port layers back to integers
+                for i in range(0, len(self.component.ports)):
+                    self.component.ports[i].layer = get_layer(self.component.ports[i].layer).layer
+
+                for i in range(0, len(self.component.references)):
+                    for j in range(0, len(self.component.references[i].cell.ports)):
+                        self.component.references[i].cell.ports[j].layer = get_layer(
+                            self.component.references[i].cell.ports[j].layer)
+
+                h.update(self.component.hash())
+
         if self.layerstack is not None:
             h.update(self.layerstack.model_dump_json().encode("utf-8"))
         if self.simulation_settings is not None:

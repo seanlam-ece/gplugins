@@ -256,11 +256,6 @@ class LumericalFdtdSimulation(Simulation):
             right=xmargin or xmargin_right,
         )
 
-        # Convert port layer integers to layer names to extend ports
-        # for i in range(0, len(component_with_padding.ports)):
-        #     component_with_padding.ports[i].layer = component_with_padding.ports[i].kcl.get_info(
-        #         component_with_padding.ports[i].layer).name
-
         component_extended = gf.components.extend_ports(
             component_with_padding, length=ss.distance_monitors_to_pml
         )
@@ -268,44 +263,6 @@ class LumericalFdtdSimulation(Simulation):
         component_extended_beyond_pml = gf.components.extension.extend_ports(
             component=component_extended, length=ss.port_extension
         )
-
-        # # Convert port layer names back to layer integers to write to gds
-        # for i in range(0, len(component_extended_beyond_pml.ports)):
-        #     component_extended_beyond_pml.ports[i].layer = gf.get_layer(
-        #         component_extended_beyond_pml.ports[i].layer
-        #     ).layer
-        #
-        # for i in range(0, len(component_extended.ports)):
-        #     component_extended.ports[i].layer = gf.get_layer(
-        #         component_with_padding.ports[i].layer
-        #     ).layer
-        #
-        # for i in range(0, len(component_with_padding.ports)):
-        #     component_with_padding.ports[i].layer = gf.get_layer(
-        #         component_with_padding.ports[i].layer
-        #     ).layer
-        #
-        # # Iterate through references to ensure port layers are integers
-        # for i in range(0, len(component_extended_beyond_pml.references)):
-        #     for j in range(0, len(component_extended_beyond_pml.references[i].ports)):
-        #         component_extended_beyond_pml.references[i].ports[j].layer = gf.get_layer(
-        #             component_extended_beyond_pml.references[i].ports[j].layer
-        #         )
-        #
-        # for i in range(0, len(component_extended.references)):
-        #     for j in range(0, len(component_extended.references[i].ports)):
-        #         component_extended.references[i].ports[j].layer = gf.get_layer(
-        #             component_extended.references[i].ports[j].layer
-        #         )
-        #
-        # for i in range(0, len(component_extended_beyond_pml.references)):
-        #     for j in range(0, len(component_extended_beyond_pml.references[i].ports)):
-        #         print(gf.get_layer(
-        #             component_extended_beyond_pml.references[i].ports[j].layer
-        #         ))
-        #         component_extended_beyond_pml.references[i].ports[j].layer = gf.get_layer(
-        #             component_extended_beyond_pml.references[i].ports[j].layer
-        #         )
 
         gdspath = component_extended_beyond_pml.write_gds()
 
