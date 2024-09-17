@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 import gdsfactory as gf
 import numpy as np
 from gdsfactory.component import Component
-from gdsfactory.config import logger
+from gdsfactory import logger
 from gdsfactory.pdk import get_layer_stack
 from gdsfactory.technology import LayerStack
 

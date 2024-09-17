@@ -12,7 +12,7 @@ from gdsfactory.cross_section import (
 from gdsfactory.typings import CrossSectionFactory
 from gdsfactory.component import Component
 from collections.abc import Callable
-from gdsfactory.config import logger
+from gdsfactory import logger
 from pathlib import Path
 from gdsfactory.technology.layer_stack import LayerLevel, LayerStack
 from gdsfactory.generic_tech.layer_map import LAYER

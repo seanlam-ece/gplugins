@@ -6,7 +6,7 @@ from gplugins.lumerical.recipes.waveguide_recipe import (
 )
 from gplugins.lumerical.simulation_settings import SimulationSettingsLumericalMode
 from gplugins.lumerical.convergence_settings import ConvergenceSettingsLumericalMode
-from gdsfactory.config import logger
+from gdsfactory import logger
 from gdsfactory.components.straight import straight
 import numpy as np
 import matplotlib.pyplot as plt

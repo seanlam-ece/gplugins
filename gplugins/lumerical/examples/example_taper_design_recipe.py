@@ -21,7 +21,7 @@ from gplugins.lumerical.convergence_settings import (
     ConvergenceSettingsLumericalFdtd,
     ConvergenceSettingsLumericalMode,
 )
-from gdsfactory.config import logger
+from gdsfactory import logger
 from gdsfactory.components.taper_cross_section import taper_cross_section
 from gdsfactory.components.straight import straight
 

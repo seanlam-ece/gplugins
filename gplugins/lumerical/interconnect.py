@@ -6,7 +6,8 @@ from collections import OrderedDict
 
 import numpy as np
 from gdsfactory import Component
-from gdsfactory.config import PATH, logger
+from gdsfactory.config import PATH
+from gdsfactory import logger
 
 from pathlib import Path
 from gplugins.lumerical.compact_models import LumericalCompactModel

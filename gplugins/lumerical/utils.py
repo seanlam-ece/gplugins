@@ -8,7 +8,7 @@ from xml.etree.ElementTree import Element, SubElement
 
 import pydantic
 from gdsfactory.component import Component
-from gdsfactory.config import logger
+from gdsfactory import logger
 from gdsfactory.pdk import get_layer_stack
 from gdsfactory.technology import LayerStack
 from gdsfactory.typings import PathType
@@ -51,18 +51,18 @@ def layerstack_to_lbr(
     layers = SubElement(layer_builder, "layers")
     doping_layers = SubElement(layer_builder, "doping_layers")
     for layer_name, layer_info in layerstack.to_dict().items():
-        if layer_info["layer_type"] == "grow":
+        if layer_info["info"]["layer_type"] == "grow":
             process = "Grow"
-        elif layer_info["layer_type"] == "background":
+        elif layer_info["info"]["layer_type"] == "background":
             process = "Background"
         elif (
-            layer_info["layer_type"] == "doping"
-            or layer_info["layer_type"] == "implant"
+            layer_info["info"]["layer_type"] == "doping"
+            or layer_info["info"]["layer_type"] == "implant"
         ):
             process = "Implant"
         else:
             logger.warning(
-                f'"{layer_info["layer_type"]}" layer type not supported for "{layer_name}" in Lumerical. Skipping in LBR process file generation.'
+                f'"{layer_info["info"]["layer_type"]}" layer type not supported for "{layer_name}" in Lumerical. Skipping in LBR process file generation.'
             )
             process = "Grow"
 
@@ -79,7 +79,7 @@ def layerstack_to_lbr(
                 "pattern_material_index": "0",
                 "material_index": "0",
                 "name": layer_name,
-                "layer_name": f'{layer_info["layer"][0]}:{layer_info["layer"][1]}',
+                "layer_name": f'{layer_info["layer"].layer[0]}:{layer_info["layer"].layer[1]}',
                 "start_position": f'{layer_info["zmin"] * um}',
                 "thickness": f'{layer_info["thickness"] * um}',
                 "process": f"{process}",
@@ -331,7 +331,7 @@ class Simulation:
         """
         h = hashlib.sha1()
         if self.component is not None:
-            h.update(self.component.hash_geometry(precision=1e-4).encode("utf-8"))
+            h.update(self.component.hash())
         if self.layerstack is not None:
             h.update(self.layerstack.model_dump_json().encode("utf-8"))
         if self.simulation_settings is not None:

@@ -1,4 +1,4 @@
-from gdsfactory.config import logger
+from gdsfactory import logger
 from gdsfactory.technology.layer_stack import LayerLevel, LayerStack
 
 from gplugins.lumerical.config import DEBUG_LUMERICAL, ENABLE_DOPING

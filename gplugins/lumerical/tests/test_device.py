@@ -2,7 +2,7 @@ from gplugins.lumerical.device import LumericalChargeSimulation
 from gplugins.lumerical.convergence_settings import LUMERICAL_CHARGE_CONVERGENCE_SETTINGS
 from gplugins.lumerical.simulation_settings import SimulationSettingsLumericalCharge
 from gplugins.lumerical.config import DEBUG_LUMERICAL
-from gdsfactory.config import logger
+from gdsfactory import logger
 
 def test_device():
     from functools import partial

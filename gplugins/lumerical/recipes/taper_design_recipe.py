@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 from gdsfactory import Component
 from gdsfactory.components.taper_cross_section import taper_cross_section
-from gdsfactory.config import logger
+from gdsfactory import logger
 from gdsfactory.pdk import LayerStack, get_layer_stack
 from gdsfactory.typings import ComponentFactory, CrossSectionSpec, PathType, WidthTypes
 from pydantic import BaseModel

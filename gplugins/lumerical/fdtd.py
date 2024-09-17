@@ -13,7 +13,8 @@ import numpy as np
 import pandas as pd
 import yaml
 from gdsfactory.component import Component
-from gdsfactory.config import __version__, logger
+from gdsfactory.config import __version__
+from gdsfactory import logger
 from gdsfactory.pdk import get_layer_stack
 from gdsfactory.technology import LayerStack
 
@@ -255,6 +256,11 @@ class LumericalFdtdSimulation(Simulation):
             right=xmargin or xmargin_right,
         )
 
+        # Convert port layer integers to layer names to extend ports
+        # for i in range(0, len(component_with_padding.ports)):
+        #     component_with_padding.ports[i].layer = component_with_padding.ports[i].kcl.get_info(
+        #         component_with_padding.ports[i].layer).name
+
         component_extended = gf.components.extend_ports(
             component_with_padding, length=ss.distance_monitors_to_pml
         )
@@ -262,7 +268,45 @@ class LumericalFdtdSimulation(Simulation):
         component_extended_beyond_pml = gf.components.extension.extend_ports(
             component=component_extended, length=ss.port_extension
         )
-        component_extended_beyond_pml.name = "top"
+
+        # # Convert port layer names back to layer integers to write to gds
+        # for i in range(0, len(component_extended_beyond_pml.ports)):
+        #     component_extended_beyond_pml.ports[i].layer = gf.get_layer(
+        #         component_extended_beyond_pml.ports[i].layer
+        #     ).layer
+        #
+        # for i in range(0, len(component_extended.ports)):
+        #     component_extended.ports[i].layer = gf.get_layer(
+        #         component_with_padding.ports[i].layer
+        #     ).layer
+        #
+        # for i in range(0, len(component_with_padding.ports)):
+        #     component_with_padding.ports[i].layer = gf.get_layer(
+        #         component_with_padding.ports[i].layer
+        #     ).layer
+        #
+        # # Iterate through references to ensure port layers are integers
+        # for i in range(0, len(component_extended_beyond_pml.references)):
+        #     for j in range(0, len(component_extended_beyond_pml.references[i].ports)):
+        #         component_extended_beyond_pml.references[i].ports[j].layer = gf.get_layer(
+        #             component_extended_beyond_pml.references[i].ports[j].layer
+        #         )
+        #
+        # for i in range(0, len(component_extended.references)):
+        #     for j in range(0, len(component_extended.references[i].ports)):
+        #         component_extended.references[i].ports[j].layer = gf.get_layer(
+        #             component_extended.references[i].ports[j].layer
+        #         )
+        #
+        # for i in range(0, len(component_extended_beyond_pml.references)):
+        #     for j in range(0, len(component_extended_beyond_pml.references[i].ports)):
+        #         print(gf.get_layer(
+        #             component_extended_beyond_pml.references[i].ports[j].layer
+        #         ))
+        #         component_extended_beyond_pml.references[i].ports[j].layer = gf.get_layer(
+        #             component_extended_beyond_pml.references[i].ports[j].layer
+        #         )
+
         gdspath = component_extended_beyond_pml.write_gds()
 
         # Get initial simulation region bounds
@@ -271,22 +315,22 @@ class LumericalFdtdSimulation(Simulation):
         y_min = (component_extended.ymin - ymargin) * um
         y_max = (component_extended.ymax + ymargin) * um
 
-        layer_to_thickness = layer_stack.get_layer_to_thickness()
+        layer_to_thickness = {ly.layer: thickness for ly, thickness in layer_stack.get_layer_to_thickness().items()}
         layers_thickness = [
             layer_to_thickness[layer]
-            for layer in component_with_booleans.get_layers()
+            for layer in component_with_booleans.layers
             if layer in layer_to_thickness
         ]
         if not layers_thickness:
             raise ValueError(
-                f"no layers for component {component.get_layers()}"
+                f"no layers for component {component.layers}"
                 f"in layer stack {layer_stack}"
             )
 
-        layer_to_zmin = layer_stack.get_layer_to_zmin()
+        layer_to_zmin = {ly.layer: zmin for ly, zmin in layer_stack.get_layer_to_zmin().items()}
         layers_zmin = [
             layer_to_zmin[layer]
-            for layer in component_with_booleans.get_layers()
+            for layer in component_with_booleans.layers
             if layer in layer_to_zmin
         ]
         component_thickness = max(layers_thickness)
@@ -383,8 +427,8 @@ class LumericalFdtdSimulation(Simulation):
 
         # Add ports
         for i, port in enumerate(ports):
-            zmin = layer_to_zmin[port.layer]
-            thickness = layer_to_thickness[port.layer]
+            zmin = layer_to_zmin[(ports[0].kcl.get_info(ports[0].layer).layer, ports[0].kcl.get_info(ports[0].layer).datatype)]
+            thickness = layer_to_thickness[(ports[0].kcl.get_info(ports[0].layer).layer, ports[0].kcl.get_info(ports[0].layer).datatype)]
             z = (zmin + thickness) / 2
             zspan = 2 * ss.port_margin + thickness
 

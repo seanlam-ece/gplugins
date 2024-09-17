@@ -7,7 +7,7 @@ import pandas as pd
 
 from gdsfactory.component import Component
 
-from gdsfactory.config import logger
+from gdsfactory import logger
 from pydantic import BaseModel
 
 from gplugins.design_recipe.DesignRecipe import DesignRecipe, eval_decorator
