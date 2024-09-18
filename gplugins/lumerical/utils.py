@@ -389,7 +389,7 @@ class Simulation:
         """
         self.convergence_results.convergence_settings = self.convergence_settings
         self.convergence_results.simulation_settings = self.simulation_settings
-        self.convergence_results.component_hash = self.component.hash_geometry()
+        self.convergence_results.component_hash = self.component.hash()
         self.convergence_results.layerstack = self.layerstack
         self.simulation_dirpath.mkdir(parents=True, exist_ok=True)
         self.convergence_results.save_pickle()

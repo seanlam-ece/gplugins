@@ -8,7 +8,7 @@ from gdsfactory import Component
 from gdsfactory.path import hashlib
 from gdsfactory.pdk import LayerStack, get_layer_stack
 from gdsfactory.typings import ComponentFactory
-from gdsfactory import logger
+from gdsfactory import logger, get_layer
 from pydantic import BaseModel
 
 import gplugins.design_recipe as dr
@@ -83,9 +83,22 @@ class DesignRecipe:
 
         # Initialize recipe setup
         if isinstance(self.cell, Callable):
-            cell_hash = self.cell().hash_geometry()
+            c = self.cell()
         elif type(self.cell) == Component:
-            cell_hash = self.cell.hash()
+            c = self.cell
+        else:
+            c = self.cell
+
+        # Change port layers to integers before hashing
+        for i in range(0, len(c.ports)):
+            c.ports[i].layer = get_layer(c.ports[i].layer).value
+
+        for i in range(0, len(c.references)):
+            for j in range(0, len(c.references[i].cell.ports)):
+                c.references[i].cell.ports[j].layer = get_layer(
+                    c.references[i].cell.ports[j].layer)
+
+        cell_hash = c.hash()
         self.recipe_setup = Setup(cell_hash=cell_hash,
                                   layer_stack=layer_stack)
         self.recipe_results = Results(prefix="recipe")

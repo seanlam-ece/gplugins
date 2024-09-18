@@ -24,12 +24,12 @@ design_intent = WaveguideSweepDesignIntent(
 )
 
 ### 2. DEFINE LAYER STACK
-from gdsfactory.technology.layer_stack import LayerLevel, LayerStack
+from gdsfactory.technology.layer_stack import LayerLevel, LayerStack, LogicalLayer
 
 layerstack_lumerical = LayerStack(
     layers={
         "box": LayerLevel(
-            layer=(99999, 0),
+            layer=LogicalLayer(layer=(600, 0)),
             thickness=3.0,
             zmin=-3.0,
             material="sio2",
@@ -38,7 +38,7 @@ layerstack_lumerical = LayerStack(
             layer_type="background",
         ),
         "core": LayerLevel(
-            layer=(1, 0),
+            layer=LogicalLayer(layer=(1, 0)),
             thickness=0.22,
             zmin=0.0,
             material="si",
