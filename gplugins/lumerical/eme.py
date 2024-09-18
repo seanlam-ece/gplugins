@@ -195,7 +195,6 @@ class LumericalEmeSimulation(Simulation):
         component_extended_beyond_pml = gf.components.extension.extend_ports(
             component=component_extended, length=ss.port_extension
         )
-        component_extended_beyond_pml.name = "top"
         gdspath = component_extended_beyond_pml.write_gds()
 
         process_file_path = layerstack_to_lbr(
@@ -228,17 +227,17 @@ class LumericalEmeSimulation(Simulation):
         layer_to_zmin = layerstack.get_layer_to_zmin()
         layers_thickness = [
             layer_to_thickness[layer]
-            for layer in component_with_booleans.get_layers()
+            for layer in component_with_booleans.layers
             if layer in layer_to_thickness
         ]
         if not layers_thickness:
             raise ValueError(
-                f"no layers for component {component.get_layers()}"
+                f"no layers for component {component.layers}"
                 f"in layer stack {layerstack}"
             )
         layers_zmin = [
             layer_to_zmin[layer]
-            for layer in component_with_booleans.get_layers()
+            for layer in component_with_booleans.layers
             if layer in layer_to_zmin
         ]
         component_thickness = max(layers_thickness)
