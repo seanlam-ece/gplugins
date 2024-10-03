@@ -58,6 +58,7 @@ class LumericalEmeSimulation(Simulation):
         self,
         component: Component,
         layerstack: LayerStack | None = None,
+        process: tuple | None = None,
         session: object | None = None,
         simulation_settings: SimulationSettingsLumericalEme = LUMERICAL_EME_SIMULATION_SETTINGS,
         convergence_settings: ConvergenceSettingsLumericalEme = LUMERICAL_EME_CONVERGENCE_SETTINGS,
@@ -121,12 +122,14 @@ class LumericalEmeSimulation(Simulation):
         self.convergence_settings = convergence_settings
         self.component = component
         self.layerstack = layerstack
+        self.process = process
         self.dirpath = dirpath
 
         # Initialize parent class
         super().__init__(
             component=self.component,
             layerstack=self.layerstack,
+            process=self.process,
             simulation_settings=self.simulation_settings,
             convergence_settings=self.convergence_settings,
             dirpath=self.dirpath,
@@ -198,7 +201,10 @@ class LumericalEmeSimulation(Simulation):
         gdspath = component_extended_beyond_pml.write_gds()
 
         process_file_path = to_lbr(
-            ss.material_name_to_lumerical, layerstack, self.simulation_dirpath.resolve()
+            material_map=ss.material_name_to_lumerical,
+            layerstack=self.layerstack,
+            process=self.process,
+            dirpath=self.simulation_dirpath.resolve()
         )
 
         # Create device geometry
