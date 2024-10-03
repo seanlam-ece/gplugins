@@ -1,11 +1,7 @@
 import numpy as np
 from pathlib import Path
 # Used to display Lumerical GUIs, log status, and plot results
-DEBUG_LUMERICAL = False
-
-# Enable dopant generation in lbr process file. Set this to False if using Lumerical versions 2021 or prior (Layer Builder
-# has issues with dopants for these versions of Lumerical).
-ENABLE_DOPING = True
+DEBUG_LUMERICAL = True
 
 # Opacity in DEVICE
 OPACITY = 0.4
