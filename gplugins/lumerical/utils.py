@@ -320,6 +320,7 @@ class Simulation:
         self,
         component: Component,
         layerstack: LayerStack | None = None,
+        process: tuple | None = None,
         simulation_settings: pydantic.BaseModel | None = None,
         convergence_settings: pydantic.BaseModel | None = None,
         dirpath: Path | None = None,
@@ -327,6 +328,7 @@ class Simulation:
         self.dirpath = dirpath or Path(".")
         self.component = component
         self.layerstack = layerstack or get_layer_stack()
+        self.process = process
         self.simulation_settings = simulation_settings
         self.convergence_settings = convergence_settings
 
@@ -373,6 +375,8 @@ class Simulation:
 
         if self.layerstack is not None:
             h.update(self.layerstack.model_dump_json().encode("utf-8"))
+        if self.process is not None:
+            h.update(f"{self.process}".encode("utf-8"))
         if self.simulation_settings is not None:
             h.update(self.simulation_settings.model_dump_json().encode("utf-8"))
         if self.convergence_settings is not None:

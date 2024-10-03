@@ -28,7 +28,7 @@ from gplugins.lumerical.simulation_settings import (
     LUMERICAL_EME_SIMULATION_SETTINGS,
     SimulationSettingsLumericalEme,
 )
-from gplugins.lumerical.utils import Simulation, draw_geometry, layerstack_to_lbr
+from gplugins.lumerical.utils import Simulation, draw_geometry, to_lbr
 
 
 class LumericalEmeSimulation(Simulation):
@@ -197,7 +197,7 @@ class LumericalEmeSimulation(Simulation):
         )
         gdspath = component_extended_beyond_pml.write_gds()
 
-        process_file_path = layerstack_to_lbr(
+        process_file_path = to_lbr(
             ss.material_name_to_lumerical, layerstack, self.simulation_dirpath.resolve()
         )
 

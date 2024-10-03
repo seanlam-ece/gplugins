@@ -19,7 +19,7 @@ from gplugins.lumerical.simulation_settings import (
     LUMERICAL_CHARGE_SIMULATION_SETTINGS,
     SimulationSettingsLumericalCharge,
 )
-from gplugins.lumerical.utils import Simulation, draw_geometry, layerstack_to_lbr
+from gplugins.lumerical.utils import Simulation, draw_geometry, to_lbr
 
 if TYPE_CHECKING:
     from gdsfactory.typings import PathType
@@ -109,7 +109,7 @@ class LumericalChargeSimulation(Simulation):
         # Draw geometry
         combined_material_map = ss.optical_material_name_to_lumerical.copy()
         combined_material_map.update(ss.ele_therm_material_name_to_lumerical)
-        process_file_path = layerstack_to_lbr(
+        process_file_path = to_lbr(
             material_map=combined_material_map,
             layerstack=self.layerstack,
             dirpath=self.simulation_dirpath.resolve(),

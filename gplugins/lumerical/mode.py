@@ -18,7 +18,7 @@ from gplugins.lumerical.config import marker_list, um
 from gplugins.lumerical.utils import (
     Simulation,
     draw_geometry,
-    layerstack_to_lbr,
+    to_lbr,
 )
 from gplugins.lumerical.simulation_settings import LUMERICAL_MODE_SIMULATION_SETTINGS, SimulationSettingsLumericalMode
 from gplugins.lumerical.convergence_settings import LUMERICAL_MODE_CONVERGENCE_SETTINGS, ConvergenceSettingsLumericalMode
@@ -31,6 +31,7 @@ class LumericalModeSimulation(Simulation):
     def __init__(self,
         component: Component,
         layerstack: LayerStack | None = None,
+        process: tuple | None = None,
         session: object | None = None,
         simulation_settings: SimulationSettingsLumericalMode = LUMERICAL_MODE_SIMULATION_SETTINGS,
         convergence_settings: ConvergenceSettingsLumericalMode = LUMERICAL_MODE_CONVERGENCE_SETTINGS,
@@ -50,6 +51,7 @@ class LumericalModeSimulation(Simulation):
         Parameters:
             component: The component for which the mode simulation is to be performed.
             layerstack: PDK layerstack
+            process: Process (etch, grow, implant, etc.) that affects layerstack
             session: Existing MODE session.
             simulation_settings: MODE simulation settings
             convergence_settings: MODE convergence settings
@@ -68,6 +70,7 @@ class LumericalModeSimulation(Simulation):
         self.convergence_settings = convergence_settings or LUMERICAL_MODE_CONVERGENCE_SETTINGS
         self.component = component = gf.get_component(component)
         self.layerstack = layerstack or get_layer_stack()
+        self.process = process
 
         # Update simulation settings with any additional information
         sim_settings = dict(simulation_settings)
@@ -88,6 +91,7 @@ class LumericalModeSimulation(Simulation):
         super().__init__(
             component=self.component,
             layerstack=self.layerstack,
+            process=self.process,
             simulation_settings=self.simulation_settings,
             convergence_settings=self.convergence_settings,
             dirpath=self.dirpath,
@@ -136,8 +140,9 @@ class LumericalModeSimulation(Simulation):
             s.newproject()
 
         # Set up device geometry
-        process_file_path = layerstack_to_lbr(material_map=ss.material_name_to_lumerical,
+        process_file_path = to_lbr(material_map=ss.material_name_to_lumerical,
                                               layerstack=self.layerstack,
+                                              process=self.process,
                                               dirpath=self.simulation_dirpath)
         gdspath = self.component.write_gds(dirpath=self.simulation_dirpath)
         draw_geometry(session=self.session, gdspath=gdspath, process_file_path=process_file_path)

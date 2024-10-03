@@ -91,7 +91,10 @@ class DesignRecipe:
 
         # Change port layers to integers before hashing
         for i in range(0, len(c.ports)):
-            c.ports[i].layer = get_layer(c.ports[i].layer).value
+            try:
+                c.ports[i].layer = get_layer(c.ports[i].layer).value
+            except AttributeError:
+                c.ports[i].layer = get_layer(c.ports[i].layer)
 
         for i in range(0, len(c.references)):
             for j in range(0, len(c.references[i].cell.ports)):

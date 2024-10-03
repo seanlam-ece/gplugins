@@ -33,7 +33,7 @@ from gplugins.lumerical.simulation_settings import (
 from gplugins.lumerical.utils import (
     Simulation,
     draw_geometry,
-    layerstack_to_lbr,
+    to_lbr,
 )
 
 if TYPE_CHECKING:
@@ -355,7 +355,7 @@ class LumericalFdtdSimulation(Simulation):
         )
 
         # Create Layer Builder object and insert geometry
-        process_file_path = layerstack_to_lbr(
+        process_file_path = to_lbr(
             ss.material_name_to_lumerical, layer_stack, self.simulation_dirpath.resolve()
         )
         draw_geometry(s, gdspath, process_file_path)
