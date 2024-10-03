@@ -10,16 +10,18 @@ import pydantic
 from gdsfactory.component import Component
 from gdsfactory import logger
 from gdsfactory.pdk import get_layer_stack
-from gdsfactory.technology import LayerStack
+from gdsfactory.technology import LayerStack, LogicalLayer, DerivedLayer
 from gdsfactory.typings import PathType
 from gdsfactory import get_layer
+from gdsfactory.technology.processes import Etch, Grow, Anneal, Planarize, ImplantGaussian, ImplantPhysical, DopingConstant
 
-from gplugins.lumerical.config import ENABLE_DOPING, um
+from gplugins.lumerical.config import um
 
 
-def layerstack_to_lbr(
+def to_lbr(
     material_map: dict[str, str],
     layerstack: LayerStack | None = None,
+    process: tuple | None = None,
     dirpath: PathType | None = "",
     use_pdk_material_names: bool = False,
 ) -> Path:
@@ -29,6 +31,7 @@ def layerstack_to_lbr(
     Args:
         material_map: A dictionary mapping materials used in the layer stack to Lumerical materials.
         layerstack: Layer stack that has info on layer names, layer numbers, thicknesses, etc.
+        process: Process (etch, grow, implant, etc.) that affects layerstack
         dirpath: Directory to save process file (process.lbr)
         use_pdk_material_names: Use PDK material names in the pattern material and background material fields.
                                 This is mainly used for DEVICE simulations where several materials are grouped together
@@ -43,6 +46,13 @@ def layerstack_to_lbr(
         material, thickness, sidewall angle, and other properties specified in the layer stack.
     """
     layerstack = layerstack or get_layer_stack()
+    layer_to_layername = layerstack.get_layer_to_layername()
+
+    # Extract processed layers, these are considered grow or dopant layers
+    layer_to_processes = {p.layer: [] for p in process if hasattr(p, "layer") and p.layer}
+    for p in process:
+        if hasattr(p, "layer") and p.layer:
+            layer_to_processes[p.layer].append(p)
 
     layer_builder = Element("layer_builder")
 
@@ -50,114 +60,122 @@ def layerstack_to_lbr(
     process_name.text = ""
 
     layers = SubElement(layer_builder, "layers")
-    doping_layers = SubElement(layer_builder, "doping_layers")
-    for layer_name, layer_info in layerstack.to_dict().items():
-        if layer_info["info"].get("layer_type", "") == "grow":
-            process = "Grow"
-        elif layer_info["info"].get("layer_type", "")  == "background":
-            process = "Background"
-        elif (
-            layer_info["info"].get("layer_type", "")  == "doping"
-            or layer_info["info"].get("layer_type", "")  == "implant"
-        ):
-            process = "Implant"
-        else:
-            logger.warning(
-                f'"{layer_info["info"].get("layer_type", "") }" layer type not supported for "{layer_name}" in Lumerical. Defaulting to "grow".'
+    for layer_name, layer_level in layerstack.layers.items():
+        layer = SubElement(layers, "layer")
+
+        try:
+            layer_number = layer_level.derived_layer.layer.layer if layer_level.derived_layer \
+                else layer_level.layer.layer.layer
+            layer_datatype = layer_level.derived_layer.layer.datatype if layer_level.derived_layer \
+                else layer_level.layer.layer.datatype
+        except:
+            raise(TypeError, f"Layer {layer_name} must be of type LogicalLayer.")
+
+
+
+        # Default params
+        layer_params = {
+            "enabled": "1",
+            "pattern_alpha": "0.8",
+            "start_position_auto": "0",
+            "background_alpha": "0.3",
+            "pattern_material_index": "0",
+            "material_index": "0",
+            "name": layer_name,
+            "layer_name": f'{layer_number}:{layer_datatype}',
+            "start_position": f'{layer_level.zmin * um}',
+            "thickness": f'{layer_level.thickness * um}',
+            "sidewall_angle": f'{90 - layer_level.sidewall_angle}',
+            "pattern_growth_delta": f"{layer_level.bias * um}"
+            if layer_level.bias
+            else "0",
+        }
+
+        for param, val in layer_params.items():
+            layer.set(param, val)
+
+
+        layer_processes = layer_to_processes.get((layer_number, layer_datatype), None)
+        if layer_processes and any(type(p) is Etch or type(p) is Grow for p in layer_processes):
+            layer.set(
+                "pattern_material",
+                f'{material_map.get(layer_level.material, "")}'
+                if not use_pdk_material_names
+                else layer_level.material,
             )
-            process = "Grow"
+            layer.set("process", "Grow")
+        else:
+            layer.set(
+                "material",
+                f'{material_map.get(layer_level.material, "")}'
+                if not use_pdk_material_names
+                else layer_level.material,
+            )
+            layer.set("process", "Background")
 
-        ### Set optical and metal layers
-        if process == "Grow" or process == "Background":
-            layer = SubElement(layers, "layer")
 
-            try:
-                gds_layer = f'{layer_info["layer"].layer[0]}:{layer_info["layer"].layer[1]}'
-            except ValueError:
-                gds_layer = f'{layer_info["layer"].layer.layer}:{layer_info["layer"].layer.datatype}'
-            except AttributeError:
-                gds_layer = f'{layerstack.layers[layer_name].derived_layer.layer.layer}:{layerstack.layers[layer_name].derived_layer.layer.datatype}'
+    doping_layers = SubElement(layer_builder, "doping_layers")
+    for gds_layer, layer_processes in layer_to_processes.items():
+        if any(type(p) is ImplantPhysical or type(p) is ImplantGaussian or type(p) is DopingConstant for p in layer_processes):
+            for p in layer_processes:
+                affected_layers = p.layers_or if p.layers_or else []
+                affected_layers += p.layers_diff if p.layers_diff else []
+                affected_layers += p.layers_and if p.layers_and else []
+                affected_layers += p.layers_xor if p.layers_xor else []
 
-            # Default params
-            layer_params = {
-                "enabled": "1",
-                "pattern_alpha": "0.8",
-                "start_position_auto": "0",
-                "background_alpha": "0.3",
-                "pattern_material_index": "0",
-                "material_index": "0",
-                "name": layer_name,
-                "layer_name": gds_layer,
-                "start_position": f'{layer_info["zmin"] * um}',
-                "thickness": f'{layer_info["thickness"] * um}',
-                "process": f"{process}",
-                "sidewall_angle": f'{90 - layer_info["sidewall_angle"]}',
-                "pattern_growth_delta": f"{layer_info['bias'] * um}"
-                if layer_info["bias"]
-                else "0",
-            }
+                for affected_layer in affected_layers:
+                    layer_level = layerstack.layers.get(layer_to_layername[affected_layer], None)
+                    try:
+                        layer_number = layer_level.derived_layer.layer.layer if layer_level.derived_layer \
+                            else layer_level.layer.layer.layer
+                        layer_datatype = layer_level.derived_layer.layer.datatype if layer_level.derived_layer \
+                            else layer_level.layer.layer.datatype
+                    except:
+                        raise (TypeError,
+                               f"Layer {layer_name} must be of type LogicalLayer.")
 
-            for param, val in layer_params.items():
-                layer.set(param, val)
+                    # Handle dopant range (depth of penetration)
+                    if type(p) is ImplantGaussian:
+                        dopant_range = p.range * um
+                    elif type(p) is DopingConstant:
+                        dopant_range = (p.zmax - p.zmin) / 2 * um
+                    else:
+                        dopant_range = layer_level.thickness / 2 * um
 
-            if process == "Grow":
-                layer.set(
-                    "pattern_material",
-                    f'{material_map.get(layer_info["material"], "")}'
-                    if not use_pdk_material_names
-                    else layer_info["material"],
-                )
-            elif process == "Background":
-                layer.set(
-                    "material",
-                    f'{material_map.get(layer_info["material"], "")}'
-                    if not use_pdk_material_names
-                    else layer_info["material"],
-                )
+                    # Handle concentration
+                    if type(p) is ImplantGaussian or type(p) is DopingConstant:
+                        concentration = p.peak_conc
+                    elif type(p) is ImplantPhysical:
+                        concentration = p.dose
+                    else:
+                        concentration = 0
 
-        if (process == "Implant" or process == "Background") and ENABLE_DOPING:
-            ### Set doping layers
-            # KNOWN ISSUE: If a metal or optical layer has the same name as a doping layer, Layer Builder will not compile
-            # the process file correctly and the doping layer will not appear. Therefore, doping layer names MUST be unique.
-            # FIX: Appending "_doping" to name
+                    # Handle ion type p or n
+                    if p.ion == "n" or p.ion == "p":
+                        ion = p.ion
+                    else:
+                        raise ValueError( f'Dopant must be "p" or "n". Got {p.ion}.')
 
-            # KNOWN ISSUE: If the 'process' is not 'Background' or 'Implant' for dopants, this will crash CHARGE upon importing process file.
-            # FIX: Ensure process is Background or Implant before proceeding to create entry
-
-            # KNOWN ISSUE: Dopant must be either 'p' or 'n'. Anything else will cause CHARGE to crash upon importing process file.
-            # FIX: Raise ValueErrorr when dopant is specified incorrectly
-            if layer_info["info"].get(
-                "background_doping_concentration", False
-            ) and layer_info["info"].get("background_doping_ion", False):
-                doping_layer = SubElement(doping_layers, "layer")
-                doping_params = {
-                    "z_surface_positions": f'{layer_info["zmin"] * um}',
-                    "distribution_function": "Gaussian",
-                    "phi": "0",
-                    "lateral_scatter": "2e-08",
-                    "range": f"{layer_info['thickness'] / 2 * um}",
-                    "theta": "0",
-                    "mask_layer_number": f'{layer_info["layer"].layer[0]}:{layer_info["layer"].layer[1]}',
-                    "kurtosis": "0",
-                    "process": f"{process}",
-                    "skewness": "0",
-                    "straggle": f"{layer_info['thickness'] * um}",
-                    "concentration": f"{layer_info['info']['background_doping_concentration']}",
-                    "enabled": "1",
-                    "name": f"{layer_name}_doping",
-                }
-                for param, val in doping_params.items():
-                    doping_layer.set(param, val)
-
-                if (
-                    layer_info["info"]["background_doping_ion"] == "n"
-                    or layer_info["info"]["background_doping_ion"] == "p"
-                ):
-                    doping_layer.set("dopant", layer_info["info"]["background_doping_ion"])
-                else:
-                    raise ValueError(
-                        f'Dopant must be "p" or "n". Got {layer_info["info"]["background_doping_ion"]}.'
-                    )
+                    doping_layer = SubElement(doping_layers, "layer")
+                    doping_params = {
+                        "z_surface_positions": f'{(layer_level.zmin + layer_level.thickness) * um}',
+                        "distribution_function": "Gaussian",
+                        "phi": f"{p.twist}" if type(p) is ImplantPhysical and p.twist else "0",
+                        "lateral_scatter": f"{p.lateral_straggle * um}" if type(p) is ImplantGaussian and p.lateral_straggle else "2e-8",
+                        "range": f"{dopant_range}",
+                        "theta": f"{p.tilt}" if type(p) is ImplantPhysical and p.tilt else "0",
+                        "mask_layer_number": f'{layer_number}:{layer_datatype}',
+                        "kurtosis": "0",
+                        "process": "Implant",
+                        "skewness": "0",
+                        "straggle": f"{p.vertical_straggle * um}" if type(p) is ImplantGaussian else f"{layer_level.thickness}",
+                        "concentration": f"{concentration}",
+                        "enabled": "1",
+                        "name": f"{p.name}",
+                        "dopant": f"{ion}",
+                    }
+                    for param, val in doping_params.items():
+                        doping_layer.set(param, val)
 
     # If no doping layers exist, delete element
     if len(doping_layers) == 0:
