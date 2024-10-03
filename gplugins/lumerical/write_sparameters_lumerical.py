@@ -25,7 +25,7 @@ from gplugins.lumerical.simulation_settings import (
     SIMULATION_SETTINGS_LUMERICAL_FDTD,
     SimulationSettingsLumericalFdtd,
 )
-from gplugins.lumerical.utils import draw_geometry, layerstack_to_lbr
+from gplugins.lumerical.utils import draw_geometry, to_lbr
 
 if TYPE_CHECKING:
     from gdsfactory.typings import ComponentSpec, MaterialSpec, PathType
@@ -350,7 +350,7 @@ def write_sparameters_lumerical(
     )
 
     ### Create Layer Builder object and insert geometry
-    process_file_path = layerstack_to_lbr(
+    process_file_path = to_lbr(
         material_name_to_lumerical, layer_stack, dirpath
     )
     draw_geometry(s, gdspath, process_file_path)
