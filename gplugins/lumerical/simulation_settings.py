@@ -362,7 +362,7 @@ class SimulationSettingsLumericalCharge(BaseModel):
     ] = material_name_to_lumerical_ele_therm_default
 
     metal_layer: LayerSpec = (40, 0)
-    dopant_layer: LayerSpec = (1, 0)
+    dopant_layer: LayerSpec = (3, 0)
 
     # Boundary conditions
     electron_velocity: float = 1e7

@@ -34,6 +34,7 @@ class LumericalChargeSimulation(Simulation):
     Attributes:
         component: Component geometry to simulate
         layerstack: PDK layerstack
+        process: Process (etch, grow, implant, etc.) that affects layerstack
         session: Lumerical session
         simulation_settings: CHARGE simulation settings
         convergence_settings: CHARGE convergence settings
@@ -45,6 +46,7 @@ class LumericalChargeSimulation(Simulation):
         self,
         component: Component,
         layerstack: LayerStack | None = None,
+        process: tuple | None = None,
         session: object | None = None,
         simulation_settings: SimulationSettingsLumericalCharge = LUMERICAL_CHARGE_SIMULATION_SETTINGS,
         convergence_settings: ConvergenceSettingsLumericalCharge = LUMERICAL_CHARGE_CONVERGENCE_SETTINGS,
@@ -62,6 +64,7 @@ class LumericalChargeSimulation(Simulation):
         )
         self.component = gf.get_component(component)
         self.layerstack = layerstack or get_layer_stack()
+        self.process = process
 
         sim_settings = dict(simulation_settings)
         if hasattr(component.info, "simulation_settings"):
@@ -81,6 +84,7 @@ class LumericalChargeSimulation(Simulation):
         super().__init__(
             component=self.component,
             layerstack=self.layerstack,
+            process=self.process,
             simulation_settings=self.simulation_settings,
             convergence_settings=self.convergence_settings,
             dirpath=self.dirpath,
@@ -112,6 +116,7 @@ class LumericalChargeSimulation(Simulation):
         process_file_path = to_lbr(
             material_map=combined_material_map,
             layerstack=self.layerstack,
+            process=self.process,
             dirpath=self.simulation_dirpath.resolve(),
             use_pdk_material_names=True,
         )
@@ -338,7 +343,7 @@ class LumericalChargeSimulation(Simulation):
         polygons = polygons[layer_spec]
         if ss.dimension == "2D X-Normal":
             for i in range(0, len(polygons)):
-                poly_coords = np.array([[int(p.x / dbu), int(p.y / dbu)] for p in polygons[i].each_point_hull()])
+                poly_coords = np.array([[p.x / dbu, p.y / dbu] for p in polygons[i].each_point_hull()])
                 coords = []
                 for j in range(0, len(poly_coords) - 1):
                     # If x coord crosses the simulation plane, continue to check whether the points are in the
@@ -364,8 +369,31 @@ class LumericalChargeSimulation(Simulation):
                         # If y coord is in the simulation span, add coords
                         if ss.y - ss.yspan / 2 < y < ss.y + ss.yspan / 2:
                             coords.append(np.array([x, y]))
-                coords = np.array(coords)
-                bound_coords.append([ss.x * um, np.mean(coords[:, 1]) * um, z * um])
+                    if (
+                            (j == 0 and poly_coords[0, 0] <= ss.x <= poly_coords[-1, 0])
+                            or (j == 0 and poly_coords[0, 0] >= ss.x >= poly_coords[-1, 0])
+                    ):
+                        x = ss.x
+                        # Sort the x coords such that lower coord is first, needed for numpy's linear interpolation.
+                        xp = (
+                            [poly_coords[0, 0], poly_coords[-1, 0]]
+                            if poly_coords[0, 0] < poly_coords[-1, 0]
+                            else [poly_coords[-1, 0], poly_coords[0, 0]]
+                        )
+                        yp = (
+                            [poly_coords[0, 1], poly_coords[-1, 1]]
+                            if poly_coords[0, 0] < poly_coords[-1, 0]
+                            else [poly_coords[-1, 1], poly_coords[0, 1]]
+                        )
+                        y = np.interp(ss.x, xp, yp)
+
+                        # If y coord is in the simulation span, add coords
+                        if ss.y - ss.yspan / 2 < y < ss.y + ss.yspan / 2:
+                            coords.append(np.array([x, y]))
+
+                if coords:
+                    coords = np.array(coords)
+                    bound_coords.append([ss.x * um, np.mean(coords[:, 1]) * um, z * um])
 
         elif ss.dimension == "2D Y-Normal":
             for i in range(0, len(polygons)):
@@ -395,8 +423,31 @@ class LumericalChargeSimulation(Simulation):
                         # If y coord is in the simulation span, add coords
                         if ss.x - ss.xspan / 2 < x < ss.x + ss.xspan / 2:
                             coords.append(np.array([x, y]))
-                coords = np.array(coords)
-                bound_coords.append([np.mean(coords[:, 0]) * um, ss.y * um, z * um])
+                    if (
+                            (j == 0 and poly_coords[0, 1] <= ss.y <= poly_coords[-1, 1])
+                            or (j == 0 and poly_coords[0, 1] >= ss.y >= poly_coords[-1, 1])
+                    ):
+                        y = ss.y
+                        # Sort the y coords such that lower coord is first, needed for numpy's linear interpolation.
+                        yp = (
+                            [poly_coords[0, 1], poly_coords[-1, 1]]
+                            if poly_coords[0, 1] < poly_coords[-1, 1]
+                            else [poly_coords[-1, 1], poly_coords[0, 1]]
+                        )
+                        xp = (
+                            [poly_coords[0, 0], poly_coords[-1, 0]]
+                            if poly_coords[0, 1] < poly_coords[-1, 1]
+                            else [poly_coords[-1, 0], poly_coords[0, 0]]
+                        )
+                        x = np.interp(ss.y, yp, xp)
+
+                        # If x coord is in the simulation span, add coords
+                        if ss.x - ss.xspan / 2 < x < ss.x + ss.xspan / 2:
+                            coords.append(np.array([x, y]))
+
+                if coords:
+                    coords = np.array(coords)
+                    bound_coords.append([np.mean(coords[:, 0]) * um, ss.y * um, z * um])
 
         # Delete all existing boundary conditions
         s.groupscope("::model::CHARGE::boundary conditions")
