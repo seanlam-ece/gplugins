@@ -51,6 +51,7 @@ class DesignRecipe:
         cell: GDSFactory layout cell or component. This is not necessarily the same `component` referred to in the
                 `dependencies` recipes.
         layer_stack: PDK layerstack
+        process: Process (etch, grow, implant, etc.) that affects layerstack
         dirpath: Root directory where recipes runs are stored
         recipe_dirpath: Recipe directory where recipe results are stored. This is only created upon eval of the recipe.
         run_convergence: Run convergence if True. Accurate simulations come from simulations that have run convergence.
@@ -63,6 +64,7 @@ class DesignRecipe:
     last_hash: int = -1
     cell: ComponentFactory | Component | None = None
     layer_stack: LayerStack | None = None
+    process: tuple | None = None
     dirpath: Path | None = None
     recipe_dirpath: Path | None = None
     run_convergence: bool = True
@@ -75,6 +77,7 @@ class DesignRecipe:
         cell: ComponentFactory | Component,
         dependencies: list[dr.DesignRecipe] | None = None,
         layer_stack: LayerStack = get_layer_stack(),
+        process: tuple | None = None,
         dirpath: Path | None = None,
     ):
         self.dependencies = dr.ConstituentRecipes(dependencies)
@@ -103,7 +106,8 @@ class DesignRecipe:
 
         cell_hash = c.hash()
         self.recipe_setup = Setup(cell_hash=cell_hash,
-                                  layer_stack=layer_stack)
+                                  layer_stack=layer_stack,
+                                  process=process)
         self.recipe_results = Results(prefix="recipe")
 
     def __hash__(self) -> int:
