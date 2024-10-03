@@ -38,6 +38,7 @@ class LumericalEmeSimulation(Simulation):
     Attributes:
         component: Component geometry to simulate
         layerstack: PDK layerstack
+        process: Process (etch, grow, implant, etc.) that affects layerstack
         session: Lumerical session
         simulation_settings: EME simulation settings
         convergence_settings: EME convergence settings
@@ -77,6 +78,7 @@ class LumericalEmeSimulation(Simulation):
         Parameters:
             component: Component geometry to simulate
             layerstack: PDK layerstack
+            process: Process (etch, grow, implant, etc.) that affects layerstack
             session: Lumerical session
             simulation_settings: EME simulation settings
             convergence_settings: EME convergence settings
