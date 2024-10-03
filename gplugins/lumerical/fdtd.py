@@ -21,7 +21,7 @@ from gdsfactory.technology import LayerStack
 from gplugins.common.utils.get_sparameters_path import (
     get_sparameters_path_lumerical as get_sparameters_path,
 )
-from gplugins.lumerical.config import marker_list, um
+from gplugins.lumerical.config import marker_list, um, dbu
 from gplugins.lumerical.convergence_settings import (
     LUMERICAL_FDTD_CONVERGENCE_SETTINGS,
     ConvergenceSettingsLumericalFdtd,
@@ -50,6 +50,7 @@ class LumericalFdtdSimulation(Simulation):
     Attributes:
         component: Component geometry to simulate
         layerstack: PDK layerstack
+        process: Process (etch, grow, implant, etc.) that affects layerstack
         session: Lumerical session
         simulation_settings: FDTD simulation settings
         convergence_settings: FDTD convergence settings
@@ -71,6 +72,7 @@ class LumericalFdtdSimulation(Simulation):
         self,
         component: Component,
         layerstack: LayerStack | None = None,
+        process: tuple | None = None,
         session: object | None = None,
         simulation_settings: SimulationSettingsLumericalFdtd = SIMULATION_SETTINGS_LUMERICAL_FDTD,
         convergence_settings: ConvergenceSettingsLumericalFdtd = LUMERICAL_FDTD_CONVERGENCE_SETTINGS,
@@ -111,6 +113,7 @@ class LumericalFdtdSimulation(Simulation):
         Args:
             component: Component to simulate.
             layerstack: PDK layerstack
+            process: Process (etch, grow, implant, etc.) that affects layerstack
             session: you can pass a session=lumapi.FDTD() or it will create one.
             simulation_settings: dataclass with all simulation_settings.
             convergence_settings: FDTD convergence settings
@@ -193,6 +196,7 @@ class LumericalFdtdSimulation(Simulation):
         if not ports:
             raise ValueError(f"{component.name!r} does not have any optical ports")
         self.layerstack = layer_stack = layerstack or get_layer_stack()
+        self.process = process
 
         # Update simulation settings with any additional information
         sim_settings = dict(simulation_settings)
@@ -213,6 +217,7 @@ class LumericalFdtdSimulation(Simulation):
         super().__init__(
             component=self.component,
             layerstack=self.layerstack,
+            process=self.process,
             simulation_settings=self.simulation_settings,
             convergence_settings=self.convergence_settings,
             dirpath=self.dirpath,
@@ -272,7 +277,7 @@ class LumericalFdtdSimulation(Simulation):
         y_min = (component_extended.ymin - ymargin) * um
         y_max = (component_extended.ymax + ymargin) * um
 
-        layer_to_thickness = {ly.layer: thickness for ly, thickness in layer_stack.get_layer_to_thickness().items()}
+        layer_to_thickness = layer_stack.get_layer_to_thickness()
         layers_thickness = [
             layer_to_thickness[layer]
             for layer in component_with_booleans.layers
@@ -284,7 +289,7 @@ class LumericalFdtdSimulation(Simulation):
                 f"in layer stack {layer_stack}"
             )
 
-        layer_to_zmin = {ly.layer: zmin for ly, zmin in layer_stack.get_layer_to_zmin().items()}
+        layer_to_zmin = layer_stack.get_layer_to_zmin()
         layers_zmin = [
             layer_to_zmin[layer]
             for layer in component_with_booleans.layers
@@ -356,7 +361,7 @@ class LumericalFdtdSimulation(Simulation):
 
         # Create Layer Builder object and insert geometry
         process_file_path = to_lbr(
-            ss.material_name_to_lumerical, layer_stack, self.simulation_dirpath.resolve()
+            material_map=ss.material_name_to_lumerical, layerstack=self.layerstack, process=self.process, dirpath=self.simulation_dirpath.resolve()
         )
         draw_geometry(s, gdspath, process_file_path)
 
@@ -400,30 +405,30 @@ class LumericalFdtdSimulation(Simulation):
             if -45 <= deg <= 45:
                 direction = "Backward"
                 injection_axis = "x-axis"
-                s.setnamed(p, "x", (port.x + ss.port_translation) * um)
-                s.setnamed(p, "y", port.y * um)
+                s.setnamed(p, "x", (port.x / dbu + ss.port_translation) * um)
+                s.setnamed(p, "y", port.y / dbu * um)
                 dxp = 0
-                dyp = 2 * ss.port_margin + port.width
+                dyp = 2 * ss.port_margin + port.width / dbu
             elif 45 < deg < 90 + 45:
                 direction = "Backward"
                 injection_axis = "y-axis"
-                s.setnamed(p, "x", port.x * um)
-                s.setnamed(p, "y", (port.y - ss.port_translation) * um)
-                dxp = 2 * ss.port_margin + port.width
+                s.setnamed(p, "x", port.x / dbu * um)
+                s.setnamed(p, "y", (port.y / dbu - ss.port_translation) * um)
+                dxp = 2 * ss.port_margin + port.width / dbu
                 dyp = 0
             elif 90 + 45 < deg < 180 + 45:
                 direction = "Forward"
                 injection_axis = "x-axis"
-                s.setnamed(p, "x", (port.x - ss.port_translation) * um)
-                s.setnamed(p, "y", port.y * um)
+                s.setnamed(p, "x", (port.x / dbu - ss.port_translation) * um)
+                s.setnamed(p, "y", port.y / dbu * um)
                 dxp = 0
-                dyp = 2 * ss.port_margin + port.width
+                dyp = 2 * ss.port_margin + port.width / dbu
             elif 180 + 45 < deg < 180 + 45 + 90:
                 direction = "Forward"
                 injection_axis = "y-axis"
-                s.setnamed(p, "x", port.x * um)
-                s.setnamed(p, "y", (port.y + ss.port_translation) * um)
-                dxp = 2 * ss.port_margin + port.width
+                s.setnamed(p, "x", port.x / dbu * um)
+                s.setnamed(p, "y", (port.y / dbu + ss.port_translation) * um)
+                dxp = 2 * ss.port_margin + port.width / dbu
                 dyp = 0
 
             else:
@@ -465,7 +470,7 @@ class LumericalFdtdSimulation(Simulation):
             s.setnamed(p, "name", port.name)
 
             logger.info(
-                f"port {p} {port.name!r}: at ({port.x}, {port.y}, 0)"
+                f"port {p} {port.name!r}: at ({port.x / dbu}, {port.y / dbu}, 0)"
                 f"size = ({dxp}, {dyp}, {zspan})"
             )
 
@@ -644,7 +649,7 @@ class LumericalFdtdSimulation(Simulation):
         s.setnamed("FDTD", "mesh accuracy", mesh_accuracy)
 
         # Iterate through ports
-        for port in self.component.get_ports():
+        for port in self.component.ports:
             # Set port size 5x existing size to calculate E field intensity properly and ensure FDTD region encapsulates port
             # NOTE: Port edges have a boundary condition that ensures the field decays to near zero. So, even if port is
             # sized just larger than waveguide, E field does not decay properly
