@@ -5,6 +5,7 @@ from gplugins.lumerical.convergence_settings import LUMERICAL_CHARGE_CONVERGENCE
 from gplugins.lumerical.device import LumericalChargeSimulation
 from gdsfactory.generic_tech.layer_stack import get_process
 import gdsfactory as gf
+from gdsfactory.pdk import get_layer_stack
 
 # Create curved PN junction
 c = gf.Component()
@@ -21,8 +22,7 @@ cross_section_pn = partial(
 p = gf.path.arc(radius=10, angle=135)
 c = p.extrude(cross_section_pn)
 
-from gdsfactory.pdk import get_layer_stack
-
+# Get process and layerstack
 process = get_process()
 layer_stack = get_layer_stack()
 
