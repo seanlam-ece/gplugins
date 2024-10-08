@@ -144,7 +144,7 @@ class LumericalModeSimulation(Simulation):
                                               layerstack=self.layerstack,
                                               process=self.process,
                                               dirpath=self.simulation_dirpath)
-        gdspath = self.component.write_gds(dirpath=self.simulation_dirpath)
+        gdspath = self.component.write_gds(gdsdir=self.simulation_dirpath)
         draw_geometry(session=self.session, gdspath=gdspath, process_file_path=process_file_path)
 
         # Set up simulation region

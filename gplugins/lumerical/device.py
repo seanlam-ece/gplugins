@@ -120,7 +120,7 @@ class LumericalChargeSimulation(Simulation):
             dirpath=self.simulation_dirpath.resolve(),
             use_pdk_material_names=True,
         )
-        gdspath = self.component.write_gds(dirpath=self.simulation_dirpath.resolve())
+        gdspath = self.component.write_gds(gdsdir=self.simulation_dirpath.resolve())
         draw_geometry(session=s, gdspath=gdspath, process_file_path=process_file_path)
 
         # Add and configure simulation region
