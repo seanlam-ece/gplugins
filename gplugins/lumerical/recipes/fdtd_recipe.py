@@ -32,6 +32,7 @@ class FdtdRecipe(DesignRecipe):
         self,
         component: Component | None = None,
         layer_stack: LayerStack | None = None,
+        process: tuple | None = None,
         simulation_setup: SimulationSettingsLumericalFdtd
         | None = SIMULATION_SETTINGS_LUMERICAL_FDTD,
         convergence_setup: ConvergenceSettingsLumericalFdtd
@@ -44,12 +45,13 @@ class FdtdRecipe(DesignRecipe):
         Parameters:
             component: Component
             layer_stack: PDK layer stack
+            process: Process (etch, grow, implant, etc.) that affects layerstack
             simulation_setup: FDTD simulation setup
             convergence_setup: FDTD convergence setup
             dirpath: Directory to store files.
         """
         layer_stack = layer_stack or get_layer_stack()
-        super().__init__(cell=component, layer_stack=layer_stack, dirpath=dirpath)
+        super().__init__(cell=component, layer_stack=layer_stack, process=process, dirpath=dirpath)
         # Add information to recipe setup. NOTE: This is used for hashing
         self.recipe_setup.simulation_setup = simulation_setup
         self.recipe_setup.convergence_setup = convergence_setup
@@ -72,6 +74,7 @@ class FdtdRecipe(DesignRecipe):
         sim = LumericalFdtdSimulation(
             component=self.cell,
             layerstack=self.recipe_setup.layer_stack,
+            process=self.recipe_setup.process,
             simulation_settings=self.recipe_setup.simulation_setup,
             convergence_settings=self.recipe_setup.convergence_setup,
             dirpath=self.dirpath,
