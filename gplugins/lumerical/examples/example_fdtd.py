@@ -7,6 +7,11 @@ from gplugins.lumerical.convergence_settings import LUMERICAL_FDTD_CONVERGENCE_S
 from gplugins.lumerical.fdtd import LumericalFdtdSimulation
 from gplugins.lumerical.simulation_settings import SIMULATION_SETTINGS_LUMERICAL_FDTD
 from gdsfactory.generic_tech.layer_stack import get_layer_stack, get_process
+import matplotlib.pyplot as plt
+import numpy as np
+import matplotlib as mpl
+
+mpl.use("Qt5Agg")
 
 xs_wg = partial(
     gf.cross_section.cross_section,
@@ -41,6 +46,9 @@ layerstack.layers.pop("via2")
 layerstack.layers.pop("metal3")
 
 SIMULATION_SETTINGS_LUMERICAL_FDTD.port_translation = 1.0
+SIMULATION_SETTINGS_LUMERICAL_FDTD.solver_type = "gpu"
+SIMULATION_SETTINGS_LUMERICAL_FDTD.frequency_dependent_profile = False
+
 sim = LumericalFdtdSimulation(
     component=taper,
     layerstack=layerstack,
@@ -53,4 +61,17 @@ sim = LumericalFdtdSimulation(
 )
 
 sp = sim.write_sparameters(overwrite=True)
-print(sp)
+plt.figure()
+plt.plot(sp.loc[:,"wavelength"], 10 * np.log10(abs(sp.loc[:, "S21"]) ** 2), label="|S21|^2")
+plt.title("Transmission |S21|^2")
+plt.xlabel("Wavelength (um)")
+plt.ylabel("Transmission (dB)")
+plt.grid("on")
+
+plt.figure()
+plt.plot(sp.loc[:,"wavelength"], 10 * np.log10(abs(sp.loc[:, "S11"]) ** 2), label="|S11|^2")
+plt.title("Reflection |S11|^2")
+plt.xlabel("Wavelength (um)")
+plt.ylabel("Reflection (dB)")
+plt.grid("on")
+

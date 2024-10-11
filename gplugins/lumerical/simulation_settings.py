@@ -224,6 +224,7 @@ class SimulationSettingsLumericalFdtd(BaseModel):
     """Lumerical FDTD simulation_settings.
 
     Parameters:
+        solver_type: CPU or GPU type solver
         port_margin: on both sides of the port width (um).
         port_extension: port extension that extends waveguide passed ports (um).
         port_translation: Translate port by x microns away from (positive) or toward (negative) the device.
@@ -243,7 +244,7 @@ class SimulationSettingsLumericalFdtd(BaseModel):
         material_name_to_lumerical: Mapping of PDK materials to Lumerical materials
         port_field_intensity_threshold: E-field intensity at the edge of each port. Used to resize ports and FDTD region.
     """
-
+    solver_type: Literal["cpu", "gpu"] = "cpu"
     port_margin: float = 0.2
     port_extension: float = 5.0
     port_translation: float = 0.0

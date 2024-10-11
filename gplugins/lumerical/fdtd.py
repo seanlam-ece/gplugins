@@ -359,6 +359,11 @@ class LumericalFdtdSimulation(Simulation):
             simulation_temperature=ss.simulation_temperature,
         )
 
+        if ss.solver_type == "gpu":
+            s.setnamed("FDTD", "express mode", True)
+            s.setresource("FDTD", "GPU", True)
+            s.setresource("FDTD", 1, "GPU Device", "Auto")
+
         # Create Layer Builder object and insert geometry
         process_file_path = to_lbr(
             material_map=ss.material_name_to_lumerical, layerstack=self.layerstack, process=self.process, dirpath=self.simulation_dirpath.resolve()
@@ -399,7 +404,8 @@ class LumericalFdtdSimulation(Simulation):
             s.setnamed(p, "z", z * um)
             s.setnamed(p, "z span", zspan * um)
             s.setnamed(p, "frequency dependent profile", ss.frequency_dependent_profile)
-            s.setnamed(p, "number of field profile samples", ss.field_profile_samples)
+            if ss.frequency_dependent_profile:
+                s.setnamed(p, "number of field profile samples", ss.field_profile_samples)
 
             deg = port.orientation
             if -45 <= deg <= 45:
@@ -485,7 +491,7 @@ class LumericalFdtdSimulation(Simulation):
         s.setsweep("S sweep", "auto symmetry", True)
 
         # Save simulation
-        s.save(str(filepath_fsp))
+        s.save(str(filepath_fsp.resolve()))
 
         # Run convergence testing if no convergence results are available or user wants to override convergence results
         # or if setup has changed
@@ -654,9 +660,9 @@ class LumericalFdtdSimulation(Simulation):
             # NOTE: Port edges have a boundary condition that ensures the field decays to near zero. So, even if port is
             # sized just larger than waveguide, E field does not decay properly
             s.select(f"FDTD::ports::{port.name}")
-            s.set("x span", s.get("x span") * 5)
-            s.set("y span", s.get("y span") * 5)
-            s.set("z span", s.get("z span") * 5)
+            s.set("x span", s.get("x span") * 3)
+            s.set("y span", s.get("y span") * 3)
+            s.set("z span", s.get("z span") * 3)
 
             port_xmin = s.get("x min")
             port_xmax = s.get("x max")
@@ -909,7 +915,7 @@ class LumericalFdtdSimulation(Simulation):
         ymax = s.get("y min")
         zmin = s.get("z max")
         zmax = s.get("z min")
-        for port in self.component.get_ports():
+        for port in self.component.ports:
             s.select(f"FDTD::ports::{port.name}")
             port_ymin = s.get("y min")
             port_ymax = s.get("y max")
@@ -990,16 +996,23 @@ class LumericalFdtdSimulation(Simulation):
         s.set("monitor frequency points", wavl_points)
 
         # Set resources
-        total_cpus = multiprocessing.cpu_count()
-        cpus_free = int(np.floor(total_cpus * cpu_usage_percent))
-        capacity = int(np.floor(cpus_free / min_cpus_per_sim)) or 1
-        cpus_per_sim = min_cpus_per_sim if capacity > 1 else cpus_free
-        s.setresource("FDTD", 1, "processes", cpus_per_sim)
-        s.setresource("FDTD", 1, "capacity", capacity)
-        if verbose:
-            logger.info(
-                f"Using {cpus_per_sim} cores per simulation with {capacity} simulations running simultaneously."
-            )
+        if ss.solver_type == "gpu":
+            s.setnamed("FDTD", "express mode", True)
+            s.setresource("FDTD", "GPU", True)
+            s.setresource("FDTD", 1, "GPU Device", "Auto")
+        else:
+            s.setnamed("FDTD", "express mode", False)
+            s.setresource("FDTD", "GPU", False)
+            total_cpus = multiprocessing.cpu_count()
+            cpus_free = int(np.floor(total_cpus * cpu_usage_percent))
+            capacity = int(np.floor(cpus_free / min_cpus_per_sim)) or 1
+            cpus_per_sim = min_cpus_per_sim if capacity > 1 else cpus_free
+            s.setresource("FDTD", 1, "processes", cpus_per_sim)
+            s.setresource("FDTD", 1, "capacity", capacity)
+            if verbose:
+                logger.info(
+                    f"Using {cpus_per_sim} cores per simulation with {capacity} simulations running simultaneously."
+                )
 
         # Create convergence sims
         mesh_accuracies = []
@@ -1012,6 +1025,17 @@ class LumericalFdtdSimulation(Simulation):
 
             convergence_sims.append(str(self.simulation_dirpath.resolve() / f"{base_filename}.fsp"))
             mesh_accuracies.append(mesh_accuracy)
+
+            # Start with fresh s-parameter sweep object
+            # If deleting existing s-param sweep fails, this means none exist
+            # KNOWN BUG: Lumerical may crash if new s-parameter sweep not created
+            try:
+                s.deletesweep("s-parameter sweep")
+            except:
+                pass
+            s.addsweep(3)
+            s.setsweep("s-parameter sweep", "Excite all ports", 1)
+            s.setsweep("S sweep", "auto symmetry", True)
 
             s.save(convergence_sims[-1])
             s.savesweep()
@@ -1126,7 +1150,7 @@ class LumericalFdtdSimulation(Simulation):
     def update_field_intensity_threshold(
         self,
         port_modes: dict | None = None,
-        mesh_accuracy: int = 3,
+        mesh_accuracy: int = 4,
         wavl_points: int = 1,
         cpu_usage_percent: float = 0.4,
         min_cpus_per_sim: int = 8,

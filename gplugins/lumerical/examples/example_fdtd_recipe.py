@@ -10,7 +10,7 @@ from functools import partial
 from gdsfactory.components.taper_cross_section import taper_cross_section
 
 ### 0. DEFINE WHERE FILES ARE SAVED
-dirpath = Path("../recipes/recipe_runs")
+dirpath = Path(r"../recipes/recipe_runs")
 dirpath.mkdir(parents=True, exist_ok=True)
 
 ### 1. DEFINE DESIGN
@@ -34,56 +34,37 @@ taper = taper_cross_section(
 )
 
 ### 2. DEFINE LAYER STACK
-from gdsfactory.technology.layer_stack import LayerLevel, LayerStack, LogicalLayer
+from gdsfactory.generic_tech.layer_stack import get_layer_stack, get_process
+layerstack = get_layer_stack()
+process = get_process()
 
-layerstack_lumerical = LayerStack(
-    layers={
-        "clad": LayerLevel(
-            layer=LogicalLayer(layer=(600, 0)),
-            thickness=3.0,
-            zmin=0.0,
-            material="sio2",
-            sidewall_angle=0.0,
-            mesh_order=9,
-            info={"layer_type": "background"},
-        ),
-        "box": LayerLevel(
-            layer=LogicalLayer(layer=(600, 0)),
-            thickness=3.0,
-            zmin=-3.0,
-            material="sio2",
-            sidewall_angle=0.0,
-            mesh_order=9,
-            info={"layer_type": "background"},
-        ),
-        "core": LayerLevel(
-            layer=LogicalLayer(layer=(1, 0)),
-            thickness=0.22,
-            zmin=0.0,
-            material="si",
-            sidewall_angle=2.0,
-            width_to_z=0.5,
-            mesh_order=2,
-            info={"active": True,
-                  "layer_type": "grow"},
-        ),
-    }
-)
+# Remove metal and nitride layers for visualization in Lumerical
+layerstack.layers.pop("nitride")
+layerstack.layers.pop("via_contact")
+layerstack.layers.pop("metal1")
+layerstack.layers.pop("heater")
+layerstack.layers.pop("via1")
+layerstack.layers.pop("metal2")
+layerstack.layers.pop("via2")
+layerstack.layers.pop("metal3")
+
 
 ### 3. DEFINE SIMULATION AND CONVERGENCE SETTINGS
 fdtd_simulation_setup = SimulationSettingsLumericalFdtd(
-    mesh_accuracy=2, port_translation=1.0
+    mesh_accuracy=2, port_translation=1.0, solver_type="gpu", frequency_dependent_profile=False
 )
 fdtd_convergence_setup = ConvergenceSettingsLumericalFdtd(
-    port_field_intensity_threshold=1e-6, sparam_diff=0.01
+    port_field_intensity_threshold=1e-4, sparam_diff=0.01
 )
 
 ### 4. CREATE AND RUN DESIGN RECIPE
 recipe = FdtdRecipe(
     component=taper,
-    layer_stack=layerstack_lumerical,
+    layer_stack=layerstack,
+    process=process,
     convergence_setup=fdtd_convergence_setup,
     simulation_setup=fdtd_simulation_setup,
+    dirpath=dirpath,
 )
 
 success = recipe.eval()
