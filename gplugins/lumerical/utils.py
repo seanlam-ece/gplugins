@@ -14,6 +14,7 @@ from gdsfactory.technology import LayerStack, LogicalLayer, DerivedLayer
 from gdsfactory.typings import PathType
 from gdsfactory import get_layer
 from gdsfactory.technology.processes import Etch, Grow, Anneal, Planarize, ImplantGaussian, ImplantPhysical, DopingConstant
+from gdsfactory.pdk import get_layer_tuple
 
 from gplugins.lumerical.config import um
 
@@ -69,7 +70,7 @@ def to_lbr(
             layer_datatype = layer_level.derived_layer.layer.datatype if layer_level.derived_layer \
                 else layer_level.layer.layer.datatype
         except:
-            raise(TypeError, f"Layer {layer_name} must be of type LogicalLayer.")
+            raise TypeError(f"Layer {layer_name} must be of type LogicalLayer.")
 
 
 
@@ -116,42 +117,33 @@ def to_lbr(
 
     doping_layers = SubElement(layer_builder, "doping_layers")
     for gds_layer, layer_processes in layer_to_processes.items():
-        if any(type(p) is ImplantPhysical or type(p) is ImplantGaussian or type(p) is DopingConstant for p in layer_processes):
-            for p in layer_processes:
+        for p in layer_processes:
+            if (type(p) is ImplantPhysical or type(p) is ImplantGaussian or type(p) is DopingConstant):
+
                 affected_layers = p.layers_or if p.layers_or else []
                 affected_layers += p.layers_diff if p.layers_diff else []
                 affected_layers += p.layers_and if p.layers_and else []
                 affected_layers += p.layers_xor if p.layers_xor else []
 
                 for affected_layer in affected_layers:
-                    layer_level = layerstack.layers.get(layer_to_layername[affected_layer], None)
-                    try:
-                        layer_number = layer_level.derived_layer.layer.layer if layer_level.derived_layer \
-                            else layer_level.layer.layer.layer
-                        layer_datatype = layer_level.derived_layer.layer.datatype if layer_level.derived_layer \
-                            else layer_level.layer.layer.datatype
-                    except:
-                        raise (TypeError,
-                               f"Layer {layer_name} must be of type LogicalLayer.")
+                    layer_level = layerstack.layers.get(layer_to_layername[get_layer_tuple(affected_layer)], None)
 
-                    # Handle dopant range (depth of penetration)
+                    # Handle dopant range (depth of penetration) and concentrations
                     if type(p) is ImplantGaussian:
                         dopant_range = p.range * um
+                        concentration = p.peak_conc
                     elif type(p) is DopingConstant:
                         dopant_range = (p.zmax - p.zmin) / 2 * um
-                    else:
-                        dopant_range = layer_level.thickness / 2 * um
-
-                    # Handle concentration
-                    if type(p) is ImplantGaussian or type(p) is DopingConstant:
                         concentration = p.peak_conc
                     elif type(p) is ImplantPhysical:
+                        dopant_range = layer_level.thickness / 2 * um
                         concentration = p.dose
                     else:
+                        dopant_range = layer_level.thickness / 2 * um
                         concentration = 0
 
                     # Handle ion type p or n
-                    if p.ion == "n" or p.ion == "p":
+                    if (p.ion == "n" or p.ion == "p"):
                         ion = p.ion
                     else:
                         raise ValueError( f'Dopant must be "p" or "n". Got {p.ion}.')
@@ -164,11 +156,11 @@ def to_lbr(
                         "lateral_scatter": f"{p.lateral_straggle * um}" if type(p) is ImplantGaussian and p.lateral_straggle else "2e-8",
                         "range": f"{dopant_range}",
                         "theta": f"{p.tilt}" if type(p) is ImplantPhysical and p.tilt else "0",
-                        "mask_layer_number": f'{layer_number}:{layer_datatype}',
+                        "mask_layer_number": f'{p.layer[0]}:{p.layer[1]}',
                         "kurtosis": "0",
                         "process": "Implant",
                         "skewness": "0",
-                        "straggle": f"{p.vertical_straggle * um}" if type(p) is ImplantGaussian else f"{layer_level.thickness}",
+                        "straggle": f"{p.vertical_straggle * um}" if type(p) is ImplantGaussian else f"{layer_level.thickness * um}",
                         "concentration": f"{concentration}",
                         "enabled": "1",
                         "name": f"{p.name}",

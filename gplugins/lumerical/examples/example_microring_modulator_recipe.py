@@ -13,8 +13,9 @@ from gdsfactory.typings import CrossSectionFactory
 from gdsfactory.component import Component
 from gdsfactory import logger
 from pathlib import Path
-from gdsfactory.technology.layer_stack import LayerLevel, LayerStack
+from gdsfactory.technology.layer_stack import LayerLevel, LayerStack, LogicalLayer
 from gdsfactory.generic_tech.layer_map import LAYER
+from gdsfactory.technology.processes import Etch, ImplantPhysical, Grow
 
 from gplugins.lumerical.recipes.microring_modulator_recipe import (
     PNJunctionDesignIntent,
@@ -33,7 +34,7 @@ from gplugins.lumerical.convergence_settings import (
     ConvergenceSettingsLumericalMode,
     LUMERICAL_FDTD_CONVERGENCE_SETTINGS,
 )
-
+from gdsfactory.pdk import get_layer_tuple
 
 @gf.cell
 def ring_double_pn_2seg(
@@ -119,19 +120,18 @@ def ring_double_pn_2seg(
                           length=length_pn)
 
     phase_shifter1 = pn_junction()
-    ps1 = phase_shifter1.rotate(90)
-    ref_ps1 = c.add_ref(ps1)
-    ref_ps1.x = ref_thru_coupler.ports["o2"].center[0]
-    ref_ps1.ymin = ref_thru_coupler.ports["o2"].center[1]
+    ps1 = phase_shifter1
+    ref_ps1 = c.add_ref(ps1).drotate(90)
+    ref_ps1.x = ref_thru_coupler.ports["o2"].dcenter[0]
+    ref_ps1.ymin = ref_thru_coupler.ports["o2"].dcenter[1]
 
-    ref_ps2 = c.add_ref(ps1)
-    ref_ps2.rotate(180)
-    ref_ps2.x = ref_thru_coupler.ports["o3"].center[0]
-    ref_ps2.ymin = ref_thru_coupler.ports["o3"].center[1]
+    ref_ps2 = c.add_ref(ps1).drotate(270)
+    ref_ps2.x = ref_thru_coupler.ports["o3"].dcenter[0]
+    ref_ps2.ymin = ref_thru_coupler.ports["o3"].dcenter[1]
 
     # Place add coupler above the PN phase shifters
-    ref_add_coupler.rotate(180)
-    ref_add_coupler.ymin = ref_ps1.ymax
+    ref_add_coupler.drotate(180)
+    ref_add_coupler.ymin = ref_ps1.dymax
 
     # Add ports to component
     c.add_port("o1", port=ref_thru_coupler["o1"])
@@ -218,6 +218,12 @@ pn_contacts = partial(pn, width=width_ridge,
                       gap_high_doping=gap_high_doping,
                       width_doping=width_doping,
                       width_slab=width_slab,
+                      layer_p=get_layer_tuple(LAYER.P),
+                      layer_pp=get_layer_tuple(LAYER.PP),
+                      layer_ppp=get_layer_tuple(LAYER.PPP),
+                      layer_n=get_layer_tuple(LAYER.N),
+                      layer_np=get_layer_tuple(LAYER.NP),
+                      layer_npp=get_layer_tuple(LAYER.NPP),
                       sections=(Section(width=width_contact,
                                         offset=(width_slab - width_contact) / 2,
                                         layer=waveguide_layer),
@@ -236,8 +242,7 @@ pn_contacts = partial(pn, width=width_ridge,
 c = ring_double_pn_2seg(pn_cross_section=pn_contacts,
                         waveguide_cross_section=rib,
                         length_pn=25.0)
-pn_junction_component = c.named_references["rotate_1"].parent
-c.show()
+pn_junction_component = c.insts._insts[2].cell
 
 ### 2. DEFINE LAYER STACK
 core_thickness = 0.155  # um
@@ -283,177 +288,164 @@ ppp = dopant_concentration_sets[set][5]
 layerstack_lumerical = LayerStack(
     layers={
         "clad": LayerLevel(
-            layer=(99999, 0),
+            layer=LogicalLayer(layer=LAYER.WAFER),
             thickness=3.0,
             zmin=0.0,
             material="sio2",
-            sidewall_angle=0.0,
             mesh_order=9,
-            layer_type="background",
         ),
         "box": LayerLevel(
-            layer=(99999, 0),
+            layer=LogicalLayer(layer=LAYER.WAFER),
             thickness=3.0,
             zmin=-3.0,
             material="sio2",
-            sidewall_angle=0.0,
             mesh_order=9,
-            layer_type="background",
         ),
         "core": LayerLevel(
-            layer=(1, 0),
+            layer=LogicalLayer(layer=LAYER.WG),
             thickness=core_thickness,
             zmin=0.0,
             material="si",
             sidewall_angle=2.0,
             width_to_z=0.5,
             mesh_order=2,
-            layer_type="grow",
             info={"active": True},
         ),
         "slab90": LayerLevel(
-            layer=(3, 0),
+            layer=LogicalLayer(layer=LAYER.SLAB90),
             thickness=slab_thickness,
             zmin=0.0,
             material="si",
             sidewall_angle=2.0,
             width_to_z=0.5,
             mesh_order=2,
-            layer_type="grow",
             info={"active": True},
         ),
-        "N": LayerLevel(
-            layer=LAYER.N,
-            thickness=core_thickness,
-            zmin=core_thickness,
-            material="si",
-            mesh_order=4,
-            background_doping_concentration=n,
-            background_doping_ion="n",
-            orientation="100",
-            layer_type="doping",
-        ),
-        "NP": LayerLevel(
-            layer=LAYER.NP,
-            thickness=core_thickness,
-            zmin=core_thickness,
-            material="si",
-            mesh_order=4,
-            background_doping_concentration=np,
-            background_doping_ion="n",
-            orientation="100",
-            layer_type="doping",
-        ),
-        "NPP": LayerLevel(
-            layer=LAYER.NPP,
-            thickness=core_thickness,
-            zmin=core_thickness,
-            material="si",
-            mesh_order=4,
-            background_doping_concentration=npp,
-            background_doping_ion="n",
-            orientation="100",
-            layer_type="doping",
-        ),
-        "P": LayerLevel(
-            layer=LAYER.P,
-            thickness=core_thickness,
-            zmin=core_thickness,
-            material="si",
-            mesh_order=4,
-            background_doping_concentration=p,
-            background_doping_ion="p",
-            orientation="100",
-            layer_type="doping",
-        ),
-        "PP": LayerLevel(
-            layer=LAYER.PP,
-            thickness=core_thickness,
-            zmin=core_thickness,
-            material="si",
-            mesh_order=4,
-            background_doping_concentration=pp,
-            background_doping_ion="p",
-            orientation="100",
-            layer_type="doping",
-        ),
-        "PPP": LayerLevel(
-            layer=LAYER.PPP,
-            thickness=core_thickness,
-            zmin=core_thickness,
-            material="si",
-            mesh_order=4,
-            background_doping_concentration=ppp,
-            background_doping_ion="p",
-            orientation="100",
-            layer_type="doping",
-        ),
         "via": LayerLevel(
-            layer=LAYER.VIAC,
+            layer=LogicalLayer(layer=LAYER.VIAC),
             thickness=1.0,
             zmin=core_thickness,
             material="Aluminum",
             mesh_order=4,
-            orientation="100",
-            layer_type="grow",
+            sidewall_angle=-10,
         ),
     }
 )
 
+process_doping = (
+    Etch(
+        name="strip_etch",
+        layer=LAYER.WG,
+        layers_or=[LAYER.SLAB90],
+        depth=core_thickness
+        + 0.01,  # slight overetch for numerics
+        material="si",
+        resist_thickness=1.0,
+        positive_tone=False,
+    ),
+    Etch(
+        name="slab_etch",
+        layer=LAYER.N,
+        layers_diff=[LAYER.WG],
+        depth=core_thickness
+        - slab_thickness,
+        material="si",
+        resist_thickness=1.0,
+    ),
+    Etch(
+        name="viac",
+        layer=LAYER.VIAC,
+        depth=core_thickness,
+        material="Aluminum",
+        resist_thickness=1.0,
+    ),
+    ImplantPhysical(
+        name="N",
+        layer=LAYER.N,
+        layers_and=[LAYER.WG, LAYER.SLAB90],
+        energy=100,
+        ion="n",
+        dose=n,
+        resist_thickness=1.0,
+    ),
+    ImplantPhysical(
+        name="NP",
+        layer=LAYER.NP,
+        layers_and=[LAYER.WG, LAYER.SLAB90],
+        energy=100,
+        ion="n",
+        dose=np,
+        resist_thickness=1.0,
+    ),
+    ImplantPhysical(
+        name="NPP",
+        layer=LAYER.NPP,
+        layers_and=[LAYER.WG, LAYER.SLAB90],
+        energy=100,
+        ion="n",
+        dose=npp,
+        resist_thickness=1.0,
+    ),
+    ImplantPhysical(
+        name="P",
+        layer=LAYER.P,
+        layers_and=[LAYER.WG, LAYER.SLAB90],
+        energy=100,
+        ion="p",
+        dose=p,
+        resist_thickness=1.0,
+    ),
+    ImplantPhysical(
+        name="PP",
+        layer=LAYER.PP,
+        layers_and=[LAYER.WG, LAYER.SLAB90],
+        energy=100,
+        ion="p",
+        dose=pp,
+        resist_thickness=1.0,
+    ),
+    ImplantPhysical(
+        name="PPP",
+        layer=LAYER.PPP,
+        layers_and=[LAYER.WG, LAYER.SLAB90],
+        energy=100,
+        ion="p",
+        dose=ppp,
+        resist_thickness=1.0,
+    ),
+)
 
-layerstack_no_doping = LayerStack(
-    layers={
-        "clad": LayerLevel(
-            layer=(99999, 0),
-            thickness=3.0,
-            zmin=0.0,
-            material="sio2",
-            sidewall_angle=0.0,
-            mesh_order=9,
-            layer_type="background",
-        ),
-        "box": LayerLevel(
-            layer=(99999, 0),
-            thickness=3.0,
-            zmin=-3.0,
-            material="sio2",
-            sidewall_angle=0.0,
-            mesh_order=9,
-            layer_type="background",
-        ),
-        "core": LayerLevel(
-            layer=(1, 0),
-            thickness=core_thickness,
-            zmin=0.0,
-            material="si",
-            sidewall_angle=2.0,
-            width_to_z=0.5,
-            mesh_order=2,
-            layer_type="grow",
-            info={"active": True},
-        ),
-        "slab90": LayerLevel(
-            layer=(3, 0),
-            thickness=slab_thickness,
-            zmin=0.0,
-            material="si",
-            sidewall_angle=2.0,
-            width_to_z=0.5,
-            mesh_order=2,
-            layer_type="grow",
-            info={"active": True},
-        )}
+process_no_doping = (
+    Etch(
+        name="strip_etch",
+        layer=LAYER.WG,
+        layers_or=[LAYER.SLAB90],
+        depth=core_thickness
+        + 0.01,  # slight overetch for numerics
+        material="si",
+        resist_thickness=1.0,
+        positive_tone=False,
+    ),
+    Etch(
+        name="slab_etch",
+        layer=LAYER.N,
+        layers_diff=[LAYER.WG],
+        depth=core_thickness
+        - slab_thickness,
+        material="si",
+        resist_thickness=1.0,
+    ),
 )
 
 # 3. DEFINE SIMULATION AND CONVERGENCE SETTINGS
 charge_settings = SimulationSettingsLumericalCharge(x=pn_junction_component.x,
                                                     y=pn_junction_component.y,
-                                                    dimension="2D Y-Normal",
-                                                    xspan=width_slab + 1.0)
+                                                    dimension="2D X-Normal",
+                                                    yspan=width_slab + 1.0)
 charge_convergence_settings = ConvergenceSettingsLumericalCharge(
     global_iteration_limit=500,
     gradient_mixing="fast")
-mode_settings = SimulationSettingsLumericalMode(injection_axis="2D Y normal",
+mode_settings = SimulationSettingsLumericalMode(injection_axis="2D X normal",
                                                 wavl_pts=11,
                                                 x=charge_settings.x,
                                                 y=charge_settings.y,
@@ -465,9 +457,14 @@ mode_settings = SimulationSettingsLumericalMode(injection_axis="2D Y normal",
                                                 )
 mode_convergence_settings = ConvergenceSettingsLumericalMode()
 
+SIMULATION_SETTINGS_LUMERICAL_FDTD.solver_type = "gpu"
+SIMULATION_SETTINGS_LUMERICAL_FDTD.frequency_dependent_profile = False
+SIMULATION_SETTINGS_LUMERICAL_FDTD.mesh_accuracy = 2
+
 # 4. CREATE AND RUN DESIGN RECIPE
 mrm_recipe = PNMicroringModulatorRecipe(component=c,
                                         layer_stack=layerstack_lumerical,
+                                        process=process_doping,
                                         pn_design_intent=design_intent,
                                         mode_simulation_setup=mode_settings,
                                         mode_convergence_setup=mode_convergence_settings,
@@ -477,16 +474,18 @@ mrm_recipe = PNMicroringModulatorRecipe(component=c,
                                         fdtd_convergence_setup=LUMERICAL_FDTD_CONVERGENCE_SETTINGS,
                                         interconnect_simulation_setup=LUMERICAL_INTERCONNECT_SIMULATION_SETTINGS,
                                         dirpath=dirpath,
-                                        dependencies=[PNJunctionRecipe(component=c.named_references["rotate_1"].parent,
+                                        dependencies=[PNJunctionRecipe(component=c.insts._insts[2].cell,
                                                              layer_stack=layerstack_lumerical,
+                                                             process=process_doping,
                                                              design_intent=design_intent,
                                                              mode_simulation_setup=mode_settings,
                                                              mode_convergence_setup=mode_convergence_settings,
                                                              charge_simulation_setup=charge_settings,
                                                              charge_convergence_setup=charge_convergence_settings,
                                                              dirpath=dirpath),
-                                        FdtdRecipe(component=c.named_references["coupler_ring_1"].parent,
-                                                   layer_stack=layerstack_no_doping,
+                                        FdtdRecipe(component=c.insts._insts[0].cell,
+                                                   layer_stack=layerstack_lumerical,
+                                                   process=process_no_doping,
                                                    simulation_setup=SIMULATION_SETTINGS_LUMERICAL_FDTD,
                                                    convergence_setup=LUMERICAL_FDTD_CONVERGENCE_SETTINGS,
                                                    dirpath=dirpath)]

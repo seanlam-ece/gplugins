@@ -45,6 +45,8 @@ from gplugins.lumerical.compact_models import (
     SPARAM_COMPACT_MODEL,
 )
 from scipy.constants import speed_of_light
+from gdsfactory.technology.processes import ImplantPhysical, ImplantGaussian, DopingConstant
+from gdsfactory.pdk import get_layer_tuple
 
 
 class PNJunctionDesignIntent(BaseModel):
@@ -89,6 +91,7 @@ class PNJunctionChargeRecipe(DesignRecipe):
         self,
         component: Component | None = None,
         layer_stack: LayerStack | None = None,
+        process: tuple | None = None,
         design_intent: PNJunctionDesignIntent | None = None,
         simulation_setup: SimulationSettingsLumericalCharge
         | None = LUMERICAL_CHARGE_SIMULATION_SETTINGS,
@@ -97,7 +100,7 @@ class PNJunctionChargeRecipe(DesignRecipe):
         dirpath: Path | None = None,
     ):
         layer_stack = layer_stack or get_layer_stack()
-        super().__init__(cell=component, layer_stack=layer_stack,
+        super().__init__(cell=component, layer_stack=layer_stack, process=process,
                          dirpath=dirpath)
         # Add information to recipe setup. NOTE: This is used for hashing
         self.recipe_setup.simulation_setup = simulation_setup
@@ -119,13 +122,6 @@ class PNJunctionChargeRecipe(DesignRecipe):
         # Set up simulation to extract charge profile vs. voltage
         boundary_settings = {
             "b0": {
-                "name": self.recipe_setup.design_intent.contact1_name,
-                "bc mode": "steady state",
-                "sweep type": "single",
-                "force ohmic": True,
-                "voltage": 0,
-            },
-            "b1": {
                 "name": self.recipe_setup.design_intent.contact2_name,
                 "bc mode": "steady state",
                 "sweep type": "range",
@@ -135,9 +131,17 @@ class PNJunctionChargeRecipe(DesignRecipe):
                 "range num points": self.recipe_setup.design_intent.voltage_pts,
                 "range backtracking": "enabled",
             },
+            "b1": {
+                "name": self.recipe_setup.design_intent.contact1_name,
+                "bc mode": "steady state",
+                "sweep type": "single",
+                "force ohmic": True,
+                "voltage": 0,
+            },
         }
         sim = LumericalChargeSimulation(component=self.cell,
                                         layerstack=self.recipe_setup.layer_stack,
+                                        process=self.recipe_setup.process,
                                         simulation_settings=self.recipe_setup.simulation_setup,
                                         convergence_settings=self.recipe_setup.convergence_setup,
                                         boundary_settings=boundary_settings,
@@ -167,7 +171,12 @@ class PNJunctionChargeRecipe(DesignRecipe):
         # Get electrical results
         results = s.getresult("CHARGE", f"ac_{self.recipe_setup.design_intent.contact2_name}")
         vac = s.getnamed("CHARGE", "perturbation amplitude")
-        iac = results["dI"][0,:,0][:,0]
+        if self.recipe_setup.simulation_setup.dimension == "2D X-Normal":
+            iac = results["dI"][:,0,0][:,0]
+        elif self.recipe_setup.simulation_setup.dimension == "2D Y-Normal":
+            iac = results["dI"][0,:,0][:,0]
+        else:
+            iac = results["dI"][0, 0, :][:, 0]
         vbias = results[f"V_{self.recipe_setup.design_intent.contact2_name}"][:,0]
         f = results["f"][0][0]
 
@@ -217,6 +226,7 @@ class PNJunctionRecipe(DesignRecipe):
         self,
         component: Component | None = None,
         layer_stack: LayerStack | None = None,
+        process: tuple | None = None,
         design_intent: PNJunctionDesignIntent | None = None,
         mode_simulation_setup: SimulationSettingsLumericalMode | None = LUMERICAL_MODE_SIMULATION_SETTINGS,
         mode_convergence_setup: ConvergenceSettingsLumericalMode | None = LUMERICAL_MODE_CONVERGENCE_SETTINGS,
@@ -228,11 +238,12 @@ class PNJunctionRecipe(DesignRecipe):
         layer_stack = layer_stack or get_layer_stack()
         dependencies = dependencies or [PNJunctionChargeRecipe(component=component,
                                                layer_stack=layer_stack,
+                                               process=process,
                                                design_intent=design_intent,
                                                simulation_setup=charge_simulation_setup,
                                                convergence_setup=charge_convergence_setup,
                                                dirpath=dirpath)]
-        super().__init__(cell=component, layer_stack=layer_stack,
+        super().__init__(cell=component, layer_stack=layer_stack, process=process,
                          dirpath=dirpath, dependencies=dependencies)
         # Add information to recipe setup. NOTE: This is used for hashing
         self.recipe_setup.mode_simulation_setup = mode_simulation_setup
@@ -253,13 +264,14 @@ class PNJunctionRecipe(DesignRecipe):
         """
         # Issue: Metals affect MODE's ability to effectively calculate waveguide modes.
         # Solution: Use a different layerstack where metal layer(s) are removed
-        layerstack_lumerical_mode = self.recipe_setup.layer_stack.model_copy()
+        layerstack_lumerical_mode = self.recipe_setup.layer_stack.copy()
         layer_name = self.recipe_setup.layer_stack.get_layer_to_layername()[
-            self.recipe_setup.charge_simulation_setup.metal_layer][0]
+            self.recipe_setup.charge_simulation_setup.metal_layer]
         layerstack_lumerical_mode.layers.pop(layer_name)
 
         mode_sim = LumericalModeSimulation(component=self.cell,
                                            layerstack=layerstack_lumerical_mode,
+                                           process=self.recipe_setup.process,
                                            simulation_settings=self.recipe_setup.mode_simulation_setup,
                                            convergence_settings=self.recipe_setup.mode_convergence_setup,
                                            dirpath=self.dirpath,
@@ -279,24 +291,38 @@ class PNJunctionRecipe(DesignRecipe):
         s.set("z", 0)
         s.importdataset(str(pn_recipe.recipe_results.charge_profile_path.resolve()))
 
-        # Get original material
-        s.select("layer group")
-        layer_name = layerstack_lumerical_mode.get_layer_to_layername()[self.recipe_setup.charge_simulation_setup.dopant_layer][0]
-        base_material = s.getlayer(layer_name, "pattern material")
+        # Get layers that are doped
+        for p in self.recipe_setup.process:
+            if type(p) is ImplantPhysical or type(p) is ImplantGaussian or type(p) is DopingConstant:
+                # Get material layers that require doping
+                affected_layers = p.layers_or if p.layers_or else []
+                affected_layers += p.layers_and if p.layers_and else []
 
-        # Create material with relation between free carriers and index
-        new_material_name = f"{layer_name}_doped"
-        material_props = {"Name": new_material_name,
-                          "np density model": "Soref and Bennett",
-                          "Coefficients": "Nedeljkovic, Soref & Mashanovich, 2011",
-                          "Base Material": base_material}
+                for affected_layer in affected_layers:
+                    s.select("layer group")
+                    layer_name = layerstack_lumerical_mode.get_layer_to_layername()[get_layer_tuple(affected_layer)]
+                    base_material = s.getlayer(layer_name, "pattern material")
+                    patterned = True
+                    if not base_material:
+                        base_material = s.getlayer(layer_name, "background material")
+                        patterned = False
 
-        mname = s.addmaterial("Index perturbation")
-        s.setmaterial(mname, material_props)
+                    # Create material with relation between free carriers and index
+                    new_material_name = f"{layer_name}_doped"
+                    material_props = {"Name": new_material_name,
+                                      "np density model": "Soref and Bennett",
+                                      "Coefficients": "Nedeljkovic, Soref & Mashanovich, 2011",
+                                      "Base Material": base_material}
 
-        # Set layer material with free carriers
-        s.select("layer group")
-        s.setlayer(layer_name, "pattern material", new_material_name)
+                    mname = s.addmaterial("Index perturbation")
+                    s.setmaterial(mname, material_props)
+
+                    # Set layer material with free carriers
+                    s.select("layer group")
+                    if patterned:
+                        s.setlayer(layer_name, "pattern material", new_material_name)
+                    else:
+                        s.setlayer(layer_name, "background material", new_material_name)
 
         # If convergence setup has changed or convergence results are not available
         if (not mode_sim.convergence_is_fresh() or not mode_sim.convergence_results.available()) \
@@ -429,6 +455,7 @@ class PNMicroringModulatorRecipe(DesignRecipe):
         self,
         component: Component | None = None,
         layer_stack: LayerStack | None = None,
+        process: tuple | None = None,
         pn_design_intent: PNJunctionDesignIntent | None = None,
         mode_simulation_setup: SimulationSettingsLumericalMode | None = LUMERICAL_MODE_SIMULATION_SETTINGS,
         mode_convergence_setup: ConvergenceSettingsLumericalMode | None = LUMERICAL_MODE_CONVERGENCE_SETTINGS,
@@ -441,13 +468,14 @@ class PNMicroringModulatorRecipe(DesignRecipe):
         dirpath: Path | None = None,
     ):
         # Extract child components (coupler and pn phaseshifter)
-        coupler_component = component.named_references["coupler_ring_1"].parent
-        pn_junction_component = component.named_references["rotate_1"].parent
+        coupler_component = component.insts._insts[0].cell
+        pn_junction_component = component.insts._insts[2].cell
         # Set defaults
         layer_stack = layer_stack or get_layer_stack()
         pn_design_intent = pn_design_intent or PNJunctionDesignIntent()
         dependencies = dependencies or [PNJunctionRecipe(component=pn_junction_component,
                                          layer_stack=layer_stack,
+                                         process=process,
                                          design_intent=pn_design_intent,
                                          mode_simulation_setup=mode_simulation_setup,
                                          mode_convergence_setup=mode_convergence_setup,
@@ -456,6 +484,7 @@ class PNMicroringModulatorRecipe(DesignRecipe):
                                          dirpath=dirpath),
                         FdtdRecipe(component=coupler_component,
                                    layer_stack=layer_stack,
+                                   process=process,
                                    simulation_setup=fdtd_simulation_setup,
                                    convergence_setup=fdtd_convergence_setup,
                                    dirpath=dirpath)]
@@ -463,6 +492,7 @@ class PNMicroringModulatorRecipe(DesignRecipe):
         super().__init__(cell=component,
                          dependencies=dependencies,
                          layer_stack=layer_stack,
+                         process=process,
                          dirpath=dirpath)
 
         self.recipe_setup.pn_design_intent = pn_design_intent
@@ -494,7 +524,7 @@ class PNMicroringModulatorRecipe(DesignRecipe):
         coupler_recipe = self.dependencies.constituent_recipes[1]
 
         # Create waveguide compact model representing PN junction waveguide
-        waveguide_model = WAVEGUIDE_COMPACT_MODEL.model_copy()
+        waveguide_model = WAVEGUIDE_COMPACT_MODEL.copy()
         waveguide_model.settings.update({
             "name": "WAVEGUIDE",
             "ldf filename": str(pn_recipe.recipe_results.waveguide_profile_path.resolve()),
@@ -504,7 +534,7 @@ class PNMicroringModulatorRecipe(DesignRecipe):
         self.recipe_results.waveguide_model_settings = waveguide_model
 
         # Create phaseshifter compact model
-        ps_model = PHASESHIFTER_COMPACT_MODEL.model_copy()
+        ps_model = PHASESHIFTER_COMPACT_MODEL.copy()
         ps_model.settings.update({
             "name": "PHASESHIFTER",
             "frequency": speed_of_light / (self.recipe_setup.mode_simulation_setup.wavl * um),
@@ -517,7 +547,7 @@ class PNMicroringModulatorRecipe(DesignRecipe):
         self.recipe_results.phaseshifter_model_settings = ps_model
 
         # Create coupler compact model
-        coupler_model = SPARAM_COMPACT_MODEL.model_copy()
+        coupler_model = SPARAM_COMPACT_MODEL.copy()
         coupler_model.settings.update({
             "name": "COUPLER",
             "s parameters filename": str(coupler_recipe.recipe_results.filepath_dat.resolve()),
